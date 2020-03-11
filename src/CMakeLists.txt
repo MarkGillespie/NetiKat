@@ -1,17 +1,18 @@
 cmake_minimum_required(VERSION 2.8.9)
 
-# add_library(
-#   my_assert
-#   my_assert.cpp
-#   my_assert.h
-# )
+add_library(
+  Packets
+  TransitionMatrix.h
+  TransitionMatrix.cpp
+)
+target_link_libraries(Packets eigen)
 
 add_executable(
   run
   main.cpp
 )
 target_include_directories(run PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include")
-# target_link_libraries(run polyscope geometry-central)
+target_link_libraries(run Packets)
 
 option(PACKAGE_TESTS "Build the tests" ON)
 

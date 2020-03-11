@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 // clang-format off
-#include "SampleTest.h"
+#include "TransitionMatrixTest.h"
 // clang-format on
 
 int main(int argc, char **argv) {

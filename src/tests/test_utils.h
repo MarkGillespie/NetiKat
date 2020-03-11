@@ -7,8 +7,6 @@
 
 #include <stdlib.h> /* rand */
 
-#define EXPECT_VEC2_EQ(a, b) EXPECT_PRED2(Vector2Eq, a, b)
-#define EXPECT_VEC3_EQ(a, b) EXPECT_PRED2(Vector3Eq, a, b)
 #define EXPECT_MAT_EQ(a, b) ExpectMatEq(a, b)
 #define EXPECT_MAT_NEAR(a, b, eps) ExpectMatEq(a, b, eps)
 
