@@ -137,3 +137,10 @@ TEST_F(TransitionMatrixTest, Choice) {
 
   EXPECT_MAT_EQ(chosenVec, trueChosenVec);
 }
+
+TEST_F(TransitionMatrixTest, FlattenUnflattenIsIdentity) {
+  TransitionMatrix setZeroMat = set->set(0, 0);
+  Eigen::VectorXd flatMat = set->flatten(setZeroMat);
+  TransitionMatrix newMat = set->unflatten(flatMat);
+  EXPECT_MAT_EQ(setZeroMat, newMat);
+}

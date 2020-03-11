@@ -190,3 +190,79 @@ TransitionMatrix PacketSet::choice(double r, TransitionMatrix p,
                                    TransitionMatrix q) {
   return r * p + (1 - r) * q;
 }
+
+// B[p*]
+TransitionMatrix PacketSet::star(TransitionMatrix p) {
+  // We want to find M such that M = (p ; M) & skip
+  // I claim that (p ; M) & skip is a linear function of M (if we unwrap M into
+  // an n^2 x 1 column vector). Denote this by (p ; M) & skip = A M^. Then
+  // we just want to solve a linear system (A-I)M^ = 0
+  // We want a nonzero solution, so this becomes an eigenvector problem of A
+  // with eigenvalue 1
+
+  // Note that B[q & skip]_{a,b} = \sum_c [c \cup a = b] B[q]_{a, c}
+  Eigen::SparseMatrix<double> timeP(matrixDim * matrixDim,
+                                    matrixDim * matrixDim);
+  Eigen::SparseMatrix<double> andSkip(matrixDim * matrixDim,
+                                      matrixDim * matrixDim);
+  auto unIndex = [&](size_t i) {
+    return std::make_pair(i % matrixDim, floor(i / matrixDim));
+  };
+
+  for (size_t a = 0; a < matrixDim; ++a) {
+    for (size_t b = 0; b < matrixDim; ++b) {
+    }
+  }
+
+  return p;
+}
+
+BigTransitionMatrix PacketSet::lift(TransitionMatrix p) {
+  Eigen::SparseMatrix<double> M(matrixDim * matrixDim, matrixDim * matrixDim);
+  std::vector<Eigen::Triplet<double>> T;
+
+  // (p ; M)_{ij} = \sum_k p_{ik} M_{kj}
+  for (size_t i = 0; i < matrixDim; ++i) {
+    for (size_t j = 0; j < matrixDim; ++j) {
+      for (size_t k = 0; k < matrixDim; ++k) {
+        size_t row = bigIndex(i, j);
+        size_t col = bigIndex(k, j);
+        T.emplace_back(row, col, p(i, k));
+      }
+    }
+  }
+
+  M.setFromTriplets(T.begin(), T.end());
+  return M;
+}
+
+Eigen::VectorXd PacketSet::flatten(TransitionMatrix p) {
+  Eigen::VectorXd v = Eigen::VectorXd::Zero(matrixDim * matrixDim);
+  for (int k = 0; k < p.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(p, k); it; ++it) {
+      v(bigIndex(it.row(), it.col())) = it.value();
+    }
+  }
+  return v;
+}
+
+TransitionMatrix PacketSet::unflatten(Eigen::VectorXd v) {
+  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
+  std::vector<Eigen::Triplet<double>> T;
+
+  size_t row, col;
+  for (size_t iV = 0; iV < v.size(); ++iV) {
+    if (abs(v(iV)) > 1e-8) {
+      std::tie(row, col) = bigUnIndex(iV);
+      T.emplace_back(row, col, v(iV));
+    }
+  }
+
+  M.setFromTriplets(T.begin(), T.end());
+  return M;
+}
+
+size_t PacketSet::bigIndex(size_t i, size_t j) { return i + j * matrixDim; }
+std::pair<size_t, size_t> PacketSet::bigUnIndex(size_t i) {
+  return std::make_pair(i % matrixDim, floor(i / matrixDim));
+}
