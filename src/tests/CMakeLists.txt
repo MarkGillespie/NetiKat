@@ -23,7 +23,7 @@ set_target_properties(gmock_main PROPERTIES FOLDER extern)
 # needs. If you haven't seen it before, ARGN is "every argument after the listed ones".
 macro(package_add_test TESTNAME)
     add_executable(${TESTNAME} ${ARGN})
-    target_link_libraries(${TESTNAME} gtest gmock gtest_main)
+    target_link_libraries(${TESTNAME} gtest gmock gtest_main eigen)
     target_include_directories(${TESTNAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../include" "${CMAKE_CURRENT_SOURCE_DIR}/../" "${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME ${TESTNAME} COMMAND ${TESTNAME})
     set_target_properties(${TESTNAME} PROPERTIES FOLDER tests)
