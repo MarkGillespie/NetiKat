@@ -5,6 +5,8 @@
 #include <Eigen/Sparse>
 #include <Eigen/StdVector>
 
+#include <iostream>
+
 // Code from geometry-central
 // Nicer name for dynamic matrix
 template <typename T> using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1>;
@@ -47,4 +49,8 @@ SparseMatrix<T> reassembleMatrix(BlockDecompositionResult<T> &decomp,
                                  const SparseMatrix<double> &BA);
 
 SparseMatrix<double> speye(size_t n);
+
+template <typename T>
+SparseMatrix<T> solveSquare(SparseMatrix<T> &A, SparseMatrix<T> &rhs);
+
 #include "linear_algebra_utilities.ipp"

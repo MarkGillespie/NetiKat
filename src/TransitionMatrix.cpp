@@ -140,28 +140,37 @@ TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) {
 }
 
 // B[p & q]
-// TODO: this is stupidly show
 TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) {
+
+  // Sort nonzero entries by "a" value
+  // Map each a to {(b, val)}
+  // (a is col, b is row)
+  std::vector<std::vector<std::pair<size_t, double>>> pTriplets, qTriplets;
+  pTriplets.resize(matrixDim);
+  qTriplets.resize(matrixDim);
+  for (int kP = 0; kP < p.outerSize(); ++kP) {
+    for (Eigen::SparseMatrix<double>::InnerIterator itP(p, kP); itP; ++itP) {
+      pTriplets[itP.col()].emplace_back(itP.row(), itP.value());
+    }
+  }
+  for (int kQ = 0; kQ < q.outerSize(); ++kQ) {
+    for (Eigen::SparseMatrix<double>::InnerIterator itQ(q, kQ); itQ; ++itQ) {
+      qTriplets[itQ.col()].emplace_back(itQ.row(), itQ.value());
+    }
+  }
+
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
-  for (int kP = 0; kP < p.outerSize(); ++kP) {
-    for (Eigen::SparseMatrix<double>::InnerIterator itP(p, kP); itP; ++itP) {
-      for (int kQ = 0; kQ < q.outerSize(); ++kQ) {
-        for (Eigen::SparseMatrix<double>::InnerIterator itQ(q, kQ); itQ;
-             ++itQ) {
-
-          if (itP.col() == itQ.col()) {
-            std::set<Packet> pPackets = packetSetFromIndex(itP.row());
-            std::set<Packet> qPackets = packetSetFromIndex(itQ.row());
-
-            // Take union of sets
-            std::copy(qPackets.begin(), qPackets.end(),
-                      std::inserter(pPackets, pPackets.end()));
-            size_t d = index(pPackets);
-            T.emplace_back(d, itP.col(), itP.value() * itQ.value());
-          }
-        }
+  size_t bP, bQ;
+  double valP, valQ;
+  for (size_t a = 0; a < matrixDim; ++a) {
+    for (std::pair<size_t, double> pPair : pTriplets[a]) {
+      std::tie(bP, valP) = pPair;
+      for (std::pair<size_t, double> qPair : qTriplets[a]) {
+        std::tie(bQ, valQ) = qPair;
+        size_t packetUnion = bP | bQ;
+        T.emplace_back(packetUnion, a, valP * valQ);
       }
     }
   }
@@ -182,6 +191,7 @@ TransitionMatrix PacketSet::choice(double r, TransitionMatrix p,
 }
 
 // TODO: clean up, write more tests
+// TODO: normalize columns after pruning small values?
 // B[p*]
 TransitionMatrix PacketSet::star(TransitionMatrix p) {
 
@@ -214,7 +224,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
   }
 
   for (size_t a = 0; a < matrixDim; ++a) {
-    std::set<Packet> aSet = packetSetFromIndex(a);
     for (size_t b = 0; b < matrixDim; ++b) {
       size_t col = bigIndex(a, b);
 
@@ -223,7 +232,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
       isSaturated(col) = true;
       isAbsorbing(col) = false;
 
-      std::set<Packet> bSet = packetSetFromIndex(b);
       Eigen::VectorXd aVec = Eigen::VectorXd::Zero(matrixDim);
       aVec(a) = 1;
       Eigen::VectorXd aPrimeVec = p * aVec;
@@ -232,12 +240,8 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
         if (abs(aPrimeVec(aPrime)) < 1e-8) {
           continue;
         }
-        std::set<Packet> bPrimeSet(bSet.begin(), bSet.end());
         // Take union of sets
-        std::copy(aSet.begin(), aSet.end(),
-                  std::inserter(bPrimeSet, bPrimeSet.end()));
-
-        size_t bPrime = index(bPrimeSet);
+        size_t bPrime = a | b;
         if (bPrime != b) {
           isSaturated(col) = false;
         }
@@ -301,17 +305,8 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
   const Eigen::SparseMatrix<double> &Q = decomp.BB;
 
   Eigen::SparseMatrix<double> IminusQ = (speye(Q.rows()) - Q).transpose();
-  Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
-
-  Rt.makeCompressed();
-  IminusQ.makeCompressed();
-  solver.compute(IminusQ);
-  if (solver.info() != Eigen::Success) {
-    std::cerr << "Solver factorization error: " << solver.info() << std::endl;
-    throw std::invalid_argument("Solver factorization failed");
-  }
-
-  Eigen::SparseMatrix<double> X = solver.solve(Rt).transpose();
+  Eigen::SparseMatrix<double> X = solveSquare(IminusQ, Rt).transpose();
+  Rt.resize(0, 0);
   // cout << Rt << endl;
 
   Eigen::SparseMatrix<double> limit =
