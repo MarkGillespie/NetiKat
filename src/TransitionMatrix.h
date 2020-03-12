@@ -1,5 +1,4 @@
-#include <Eigen/Dense>
-#include <Eigen/SparseCore>
+#pragma once
 
 #include <iostream>
 #include <set>
@@ -7,12 +6,16 @@
 #include <unordered_map>
 #include <vector>
 
+#include <Eigen/Dense>
+#include <Eigen/SparseCore>
+
+#include "linear_algebra_utilities.h"
+
 using std::cerr;
 using std::cout;
 using std::endl;
 
 using TransitionMatrix = Eigen::SparseMatrix<double>;
-using BigTransitionMatrix = Eigen::SparseMatrix<double>;
 
 // Number of possible values for each field
 using PacketType = std::vector<size_t>;
@@ -59,10 +62,4 @@ public:
 
   // B[p*]
   TransitionMatrix star(TransitionMatrix p);
-
-  BigTransitionMatrix lift(TransitionMatrix p);
-  Eigen::VectorXd flatten(TransitionMatrix p);
-  TransitionMatrix unflatten(Eigen::VectorXd v);
-  size_t bigIndex(size_t i, size_t j);
-  std::pair<size_t, size_t> bigUnIndex(size_t i);
 };

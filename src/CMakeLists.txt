@@ -4,6 +4,9 @@ add_library(
   Packets
   TransitionMatrix.h
   TransitionMatrix.cpp
+  linear_algebra_utilities.h
+  linear_algebra_utilities.ipp
+  linear_algebra_utilities.cpp
 )
 target_link_libraries(Packets eigen)
 

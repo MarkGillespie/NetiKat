@@ -72,17 +72,7 @@ TransitionMatrix PacketSet::drop() {
   return M;
 }
 
-TransitionMatrix PacketSet::skip() {
-  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<double>> T;
-
-  for (size_t i = 0; i < matrixDim; ++i) {
-    T.emplace_back(i, i, 1);
-  }
-
-  M.setFromTriplets(T.begin(), T.end());
-  return M;
-}
+TransitionMatrix PacketSet::skip() { return speye(matrixDim); }
 
 // B[fieldIndex = fieldValue]
 TransitionMatrix PacketSet::test(size_t fieldIndex, size_t fieldValue) {
@@ -191,78 +181,169 @@ TransitionMatrix PacketSet::choice(double r, TransitionMatrix p,
   return r * p + (1 - r) * q;
 }
 
+// TODO: clean up, write more tests
 // B[p*]
 TransitionMatrix PacketSet::star(TransitionMatrix p) {
-  // We want to find M such that M = (p ; M) & skip
-  // I claim that (p ; M) & skip is a linear function of M (if we unwrap M into
-  // an n^2 x 1 column vector). Denote this by (p ; M) & skip = A M^. Then
-  // we just want to solve a linear system (A-I)M^ = 0
-  // We want a nonzero solution, so this becomes an eigenvector problem of A
-  // with eigenvalue 1
 
-  // Note that B[q & skip]_{a,b} = \sum_c [c \cup a = b] B[q]_{a, c}
-  Eigen::SparseMatrix<double> timeP(matrixDim * matrixDim,
-                                    matrixDim * matrixDim);
-  Eigen::SparseMatrix<double> andSkip(matrixDim * matrixDim,
-                                      matrixDim * matrixDim);
-  auto unIndex = [&](size_t i) {
+  Eigen::SparseMatrix<double> S(matrixDim * matrixDim, matrixDim * matrixDim);
+  Eigen::SparseMatrix<double> U(matrixDim * matrixDim, matrixDim * matrixDim);
+
+  std::vector<Eigen::Triplet<double>> Ts, Tu;
+
+  Vector<bool> isSaturated(matrixDim * matrixDim);
+  Vector<bool> isAbsorbing(matrixDim * matrixDim);
+
+  auto bigIndex = [&](size_t i, size_t j) { return i + matrixDim * j; };
+  auto bigUnindex = [&](size_t i) {
     return std::make_pair(i % matrixDim, floor(i / matrixDim));
   };
 
-  for (size_t a = 0; a < matrixDim; ++a) {
-    for (size_t b = 0; b < matrixDim; ++b) {
+  auto nonzeros = [](Eigen::VectorXd v) {
+    std::string out;
+    for (size_t i = 0; i < v.size(); ++i) {
+      if (v(i) > 1e-8) {
+        out += std::to_string(i) + " ";
+      }
     }
+    return out;
+  };
+
+  std::vector<std::vector<size_t>> ancestors;
+  for (size_t a = 0; a < matrixDim * matrixDim; ++a) {
+    ancestors.push_back(std::vector<size_t>());
   }
 
-  return p;
-}
+  for (size_t a = 0; a < matrixDim; ++a) {
+    std::set<Packet> aSet = packetSetFromIndex(a);
+    for (size_t b = 0; b < matrixDim; ++b) {
+      size_t col = bigIndex(a, b);
 
-BigTransitionMatrix PacketSet::lift(TransitionMatrix p) {
-  Eigen::SparseMatrix<double> M(matrixDim * matrixDim, matrixDim * matrixDim);
-  std::vector<Eigen::Triplet<double>> T;
+      // initialize isSaturated to true. We'll mark the non-saturated things as
+      // false later
+      isSaturated(col) = true;
+      isAbsorbing(col) = false;
 
-  // (p ; M)_{ij} = \sum_k p_{ik} M_{kj}
-  for (size_t i = 0; i < matrixDim; ++i) {
-    for (size_t j = 0; j < matrixDim; ++j) {
-      for (size_t k = 0; k < matrixDim; ++k) {
-        size_t row = bigIndex(i, j);
-        size_t col = bigIndex(k, j);
-        T.emplace_back(row, col, p(i, k));
+      std::set<Packet> bSet = packetSetFromIndex(b);
+      Eigen::VectorXd aVec = Eigen::VectorXd::Zero(matrixDim);
+      aVec(a) = 1;
+      Eigen::VectorXd aPrimeVec = p * aVec;
+
+      for (size_t aPrime = 0; aPrime < matrixDim; ++aPrime) {
+        if (abs(aPrimeVec(aPrime)) < 1e-8) {
+          continue;
+        }
+        std::set<Packet> bPrimeSet(bSet.begin(), bSet.end());
+        // Take union of sets
+        std::copy(aSet.begin(), aSet.end(),
+                  std::inserter(bPrimeSet, bPrimeSet.end()));
+
+        size_t bPrime = index(bPrimeSet);
+        if (bPrime != b) {
+          isSaturated(col) = false;
+        }
+        size_t row = bigIndex(aPrime, bPrime);
+        Ts.emplace_back(row, col, aPrimeVec(aPrime));
+        ancestors[row].push_back(col);
       }
     }
   }
 
-  M.setFromTriplets(T.begin(), T.end());
-  return M;
-}
+  std::function<void(size_t)> markUnsaturated = [ancestors, &isSaturated,
+                                                 &markUnsaturated](size_t ind) {
+    isSaturated(ind) = false;
+    for (size_t a : ancestors[ind]) {
+      if (isSaturated(a)) {
+        markUnsaturated(a);
+      }
+    }
+  };
 
-Eigen::VectorXd PacketSet::flatten(TransitionMatrix p) {
-  Eigen::VectorXd v = Eigen::VectorXd::Zero(matrixDim * matrixDim);
-  for (int k = 0; k < p.outerSize(); ++k) {
-    for (Eigen::SparseMatrix<double>::InnerIterator it(p, k); it; ++it) {
-      v(bigIndex(it.row(), it.col())) = it.value();
+  for (int k = 0; k < S.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(S, k); it; ++it) {
+      size_t a, b, aPrime, bPrime;
+      std::tie(a, b) = bigUnindex(it.col());
+      std::tie(aPrime, bPrime) = bigUnindex(it.row());
+
+      if (b != bPrime) {
+        markUnsaturated(it.col());
+      }
     }
   }
-  return v;
-}
+  ancestors.clear();
 
-TransitionMatrix PacketSet::unflatten(Eigen::VectorXd v) {
-  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
+  for (size_t a = 0; a < matrixDim; ++a) {
+    for (size_t b = 0; b < matrixDim; ++b) {
+      size_t col = bigIndex(a, b);
+      if (isSaturated(col)) {
+        size_t row = bigIndex(0, b);
+        Tu.emplace_back(row, col, 1);
+        isAbsorbing(row) = true;
+      } else {
+        size_t row = bigIndex(a, b);
+        Tu.emplace_back(row, col, 1);
+      }
+    }
+  }
+
+  S.setFromTriplets(Ts.begin(), Ts.end());
+  U.setFromTriplets(Tu.begin(), Tu.end());
+  Ts.clear();
+  Tu.clear();
+
+  Eigen::SparseMatrix<double> SU = S * U;
+  S.resize(0, 0);
+  U.resize(0, 0);
+
+  BlockDecompositionResult<double> decomp =
+      blockDecomposeSquare(SU, isAbsorbing);
+
+  Eigen::SparseMatrix<double> Rt = decomp.AB.transpose();
+  const Eigen::SparseMatrix<double> &Q = decomp.BB;
+
+  Eigen::SparseMatrix<double> IminusQ = (speye(Q.rows()) - Q).transpose();
+  // Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+  Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>>
+      solver;
+
+  Rt.makeCompressed();
+  IminusQ.makeCompressed();
+  solver.compute(IminusQ);
+  if (solver.info() != Eigen::Success) {
+    std::cerr << "Solver factorization error: " << solver.info() << std::endl;
+    throw std::invalid_argument("Solver factorization failed");
+  }
+
+  Eigen::SparseMatrix<double> X = solver.solve(Rt).transpose();
+  // cout << Rt << endl;
+
+  Eigen::SparseMatrix<double> limit =
+      reassembleMatrix(decomp, speye(decomp.AA.rows()), X);
+
+  // cout << limit << endl;
+
+  Eigen::SparseMatrix<double> smallLimit(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
-  size_t row, col;
-  for (size_t iV = 0; iV < v.size(); ++iV) {
-    if (abs(v(iV)) > 1e-8) {
-      std::tie(row, col) = bigUnIndex(iV);
-      T.emplace_back(row, col, v(iV));
+  for (int k = 0; k < limit.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(limit, k); it; ++it) {
+      if (abs(it.value()) < 1e-8) {
+        continue;
+      }
+      size_t a, b, aPrime, bPrime;
+      std::tie(a, b) = bigUnindex(it.col());
+      std::tie(aPrime, bPrime) = bigUnindex(it.row());
+      if (aPrime == 0 && b == 0) {
+        // cout << "found one!  ";
+        T.emplace_back(bPrime, a, it.value());
+      } else {
+        // cout << "bad one :'(";
+      }
+      // cout << "\t a: " << a << "\tb: " << b << "\ta': " << aPrime
+      //      << "\tb': " << bPrime << "\tsaturated: " << isSaturated(it.col())
+      //      << "\tval: " << it.value() << endl;
     }
   }
 
-  M.setFromTriplets(T.begin(), T.end());
-  return M;
-}
-
-size_t PacketSet::bigIndex(size_t i, size_t j) { return i + j * matrixDim; }
-std::pair<size_t, size_t> PacketSet::bigUnIndex(size_t i) {
-  return std::make_pair(i % matrixDim, floor(i / matrixDim));
+  smallLimit.setFromTriplets(T.begin(), T.end());
+  return smallLimit;
 }

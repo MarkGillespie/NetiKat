@@ -138,9 +138,16 @@ TEST_F(TransitionMatrixTest, Choice) {
   EXPECT_MAT_EQ(chosenVec, trueChosenVec);
 }
 
-TEST_F(TransitionMatrixTest, FlattenUnflattenIsIdentity) {
+TEST_F(TransitionMatrixTest, Star) {
   TransitionMatrix setZeroMat = set->set(0, 0);
-  Eigen::VectorXd flatMat = set->flatten(setZeroMat);
-  TransitionMatrix newMat = set->unflatten(flatMat);
-  EXPECT_MAT_EQ(setZeroMat, newMat);
+  TransitionMatrix starMat = set->star(setZeroMat);
+  Eigen::VectorXd v = set->toVec(std::set<Packet>{std::vector<size_t>{1, 0}});
+
+  Eigen::VectorXd starVec = starMat * v;
+
+  Eigen::VectorXd trueStarVec = set->toVec(
+      std::set<Packet>{std::vector<size_t>{0, 0}, std::vector<size_t>{1, 0}});
+
+  // TODO: not exact?
+  EXPECT_MAT_NEAR(starVec, trueStarVec, 1e-12);
 }
