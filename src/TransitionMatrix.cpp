@@ -301,9 +301,7 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
   const Eigen::SparseMatrix<double> &Q = decomp.BB;
 
   Eigen::SparseMatrix<double> IminusQ = (speye(Q.rows()) - Q).transpose();
-  // Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
-  Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>>
-      solver;
+  Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
 
   Rt.makeCompressed();
   IminusQ.makeCompressed();
