@@ -20,6 +20,17 @@ std::unique_ptr<PacketSet> TransitionMatrixTest::set = nullptr;
 // ============================================
 //        TransitionMatrix Tests
 // ============================================
+TEST_F(TransitionMatrixTest, normalizedMatrixIsStochastic) {
+  size_t dim = 10;
+  TransitionMatrix A = randomPositiveSparse(dim, 0.5);
+
+  set->normalize(A);
+  Eigen::VectorXd ones = Eigen::VectorXd::Ones(dim);
+  Eigen::VectorXd colSums = A.transpose() * ones;
+
+  EXPECT_MAT_NEAR(colSums, ones, 1e-8);
+}
+
 TEST_F(TransitionMatrixTest, indexOfPacketFromIndexIsIdentity) {
   for (size_t iP = 0; iP < set->possiblePackets; ++iP) {
     size_t newIndex = set->packetIndex(set->packetFromIndex(iP));
@@ -123,6 +134,15 @@ TEST_F(TransitionMatrixTest, AmpPreservesStochastic) {
   EXPECT_TRUE(isStochastic(C));
 }
 
+TEST_F(TransitionMatrixTest, AmpCommutes) {
+  TransitionMatrix A = randomDenseStochastic(set->matrixDim);
+  TransitionMatrix B = randomDenseStochastic(set->matrixDim);
+
+  TransitionMatrix C = set->amp(A, B);
+  TransitionMatrix D = set->amp(B, A);
+  EXPECT_MAT_NEAR(C, D, 1e-12);
+}
+
 TEST_F(TransitionMatrixTest, Seq) {
   TransitionMatrix setZeroMat = set->set(0, 0);
   TransitionMatrix setOneMat = set->set(0, 1);
@@ -151,18 +171,6 @@ TEST_F(TransitionMatrixTest, SeqPreservesStochastic) {
   EXPECT_TRUE(isStochastic(C));
 }
 
-// This isn't true
-// TEST_F(TransitionMatrixTest, SeqDistributesOverAmp) {
-//   TransitionMatrix A = randomDenseStochastic(set->matrixDim);
-//   TransitionMatrix B = randomDenseStochastic(set->matrixDim);
-//   TransitionMatrix C = randomDenseStochastic(set->matrixDim);
-
-//   TransitionMatrix M1 = set->seq(A, set->amp(B, C));
-//   TransitionMatrix M2 = set->amp(set->seq(A, B), set->seq(A, C));
-
-//   EXPECT_MAT_NEAR(M1, M2, 1e-8);
-// }
-
 TEST_F(TransitionMatrixTest, Choice) {
   TransitionMatrix setZeroMat = set->set(0, 0);
   TransitionMatrix setOneMat = set->set(0, 1);
@@ -178,42 +186,68 @@ TEST_F(TransitionMatrixTest, Choice) {
   EXPECT_MAT_EQ(chosenVec, trueChosenVec);
 }
 
-TEST_F(TransitionMatrixTest, StarApprox) {
-  TransitionMatrix M = randomDenseStochastic(set->matrixDim);
-  // TransitionMatrix approxStarMat = set->starApprox(M, 1e-2);
-  TransitionMatrix approxStarMat = set->dumbStarApprox(M, 40);
-  TransitionMatrix starMat = set->star(M);
-
-  cout << M << endl
-       << endl
-       << approxStarMat << endl
-       << endl
-       << starMat << endl
-       << endl;
-  Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
-  cout << endl
-       << "approxStarMatColSums: " << ones.transpose() * approxStarMat << endl
-       << "starMatColSums: " << ones.transpose() * starMat << endl;
-
-  EXPECT_MAT_NEAR(approxStarMat, starMat, 1e-12);
-}
-
-TEST_F(TransitionMatrixTest, StarApproxPreservesStochastic) {
-  TransitionMatrix A = randomDenseStochastic(set->matrixDim);
-  EXPECT_TRUE(isStochastic(A));
-
-  TransitionMatrix B = set->starApprox(A, 1e-1);
-  Eigen::VectorXd ones = Eigen::VectorXd::Ones(B.rows());
-  EXPECT_TRUE(isStochastic(B));
-}
-
-// TEST_F(TransitionMatrixTest, StarApproxsBothSame) {
+// TODO: this recurrence isn't the right characterization due to the annoying
+// lack of distributive property TEST_F(TransitionMatrixTest,
+// DumbApproxStarSatisfiesRecurrence) {
 //   TransitionMatrix M = randomDenseStochastic(set->matrixDim);
-//   // TransitionMatrix approxStarMat = set->starApprox(M, 1e-2);
-//   TransitionMatrix approxStarMat = set->starApprox(M, 1. / 4.);
-//   TransitionMatrix dumbApproxStarMat = set->dumbStarApprox(M, pow(2, 4));
+//   TransitionMatrix approxStarMat = set->dumbStarApprox(M, 60);
 
-//   EXPECT_MAT_NEAR(approxStarMat, dumbApproxStarMat, 1e-12);
+//   TransitionMatrix nextStep = set->amp(set->seq(M, approxStarMat),
+//   set->skip()); Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
+
+//   EXPECT_MAT_NEAR(nextStep, approxStarMat, 1e-12);
+// }
+
+// TODO: this isn't true due to annoying lack of distributive property
+// TEST_F(TransitionMatrixTest, ApproxStarSatisfiesRecurrence) {
+//   TransitionMatrix M = randomDenseStochastic(set->matrixDim);
+//   TransitionMatrix approxStarMat = set->starApprox(M, 1e-5);
+
+//   TransitionMatrix nextStep =
+//       set->amp(set->seq(M, approxStarMat), approxStarMat);
+
+//   cout << Eigen::MatrixXd(M) << endl
+//        << endl
+//        << Eigen::MatrixXd(nextStep) << endl
+//        << endl
+//        << Eigen::MatrixXd(approxStarMat) << endl
+//        << endl;
+//   Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
+//   cout << endl
+//        << "nextStep: " << ones.transpose() * nextStep << endl
+//        << "approxStarMatColSums: " << ones.transpose() * approxStarMat <<
+//        endl;
+
+//   EXPECT_MAT_NEAR(nextStep, approxStarMat, 1e-12);
+// }
+
+// TEST_F(TransitionMatrixTest, StarSatisfiesRecurrence) {
+//   TransitionMatrix M = randomDenseStochastic(set->matrixDim);
+//   TransitionMatrix starMat = set->star(M);
+
+//   TransitionMatrix nextStep = set->amp(set->seq(M, starMat), set->skip());
+
+//   cout << Eigen::MatrixXd(M) << endl
+//        << endl
+//        << Eigen::MatrixXd(nextStep) << endl
+//        << endl
+//        << Eigen::MatrixXd(starMat) << endl
+//        << endl;
+//   Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
+//   cout << endl
+//        << "nextStep: " << ones.transpose() * nextStep << endl
+//        << "starMatColSums: " << ones.transpose() * starMat << endl;
+
+//   EXPECT_MAT_NEAR(nextStep, starMat, 1e-12);
+// }
+
+// TEST_F(TransitionMatrixTest, StarApproxPreservesStochastic) {
+//   TransitionMatrix A = randomDenseStochastic(set->matrixDim);
+//   EXPECT_TRUE(isStochastic(A));
+
+//   TransitionMatrix B = set->starApprox(A, 1e-1);
+//   Eigen::VectorXd ones = Eigen::VectorXd::Ones(B.rows());
+//   EXPECT_TRUE(isStochastic(B));
 // }
 
 // TEST_F(TransitionMatrixTest, Star) {
@@ -232,10 +266,18 @@ TEST_F(TransitionMatrixTest, StarApproxPreservesStochastic) {
 //   EXPECT_MAT_NEAR(starVec, trueStarVec, 1e-12);
 // }
 
-TEST_F(TransitionMatrixTest, StarPreservesStochastic) {
-  TransitionMatrix A = randomDenseStochastic(set->matrixDim);
-  EXPECT_TRUE(isStochastic(A));
+// TEST_F(TransitionMatrixTest, StarPreservesStochastic) {
+//   TransitionMatrix A = randomDenseStochastic(set->matrixDim);
+//   EXPECT_TRUE(isStochastic(A));
 
-  TransitionMatrix B = set->star(A);
-  EXPECT_TRUE(isStochastic(B));
+//   TransitionMatrix B = set->star(A);
+//   EXPECT_TRUE(isStochastic(B));
+// }
+
+TEST_F(TransitionMatrixTest, StarAgreesWithDumbStar) {
+  TransitionMatrix A = randomDenseStochastic(set->matrixDim);
+  TransitionMatrix star = set->star(A);
+  TransitionMatrix approxStar = set->worstStarApprox(A, 20);
+
+  EXPECT_MAT_NEAR(star, approxStar, 1e-12);
 }

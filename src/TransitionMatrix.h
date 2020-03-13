@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iomanip> // std::setprecision
 #include <iostream>
 #include <set>
 #include <string>
@@ -70,5 +71,10 @@ public:
   TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-8);
 
   // B[p*]
-  TransitionMatrix dumbStarApprox(TransitionMatrix p, double tol = 1e-8);
+  TransitionMatrix dumbStarApprox(TransitionMatrix p, size_t iter);
+
+  // B[p*]
+  TransitionMatrix worstStarApprox(TransitionMatrix p, size_t iter);
+
+  void normalize(TransitionMatrix &M);
 };

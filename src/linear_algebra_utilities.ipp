@@ -160,8 +160,6 @@ SparseMatrix<T> solveSquare(SparseMatrix<T> &A, SparseMatrix<T> &rhs) {
   Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
   solver.compute(A);
 
-  std::cout << "System size: " << A.rows() << " x " << A.cols() << std::endl;
-
   if (solver.info() != Eigen::Success) {
     std::cerr << "Solver factorization error: " << solver.info() << std::endl;
     throw std::invalid_argument("Solver factorization failed");

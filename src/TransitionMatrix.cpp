@@ -169,13 +169,17 @@ TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) {
       std::tie(bP, valP) = pPair;
       for (std::pair<size_t, double> qPair : qTriplets[a]) {
         std::tie(bQ, valQ) = qPair;
-        size_t packetUnion = bP | bQ;
-        T.emplace_back(packetUnion, a, valP * valQ);
+
+        if (valP * valQ > 1e-12) {
+          size_t packetUnion = bP | bQ;
+          T.emplace_back(packetUnion, a, valP * valQ);
+        }
       }
     }
   }
 
   M.setFromTriplets(T.begin(), T.end());
+  normalize(M);
   return M;
 }
 
@@ -206,9 +210,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
 
   std::vector<Eigen::Triplet<double>> Ts, Tu;
 
-  Vector<bool> isSaturated(matrixDim * matrixDim);
-  Vector<bool> isAbsorbing(matrixDim * matrixDim);
-
   auto nonzeros = [](Eigen::VectorXd v) {
     std::string out;
     for (size_t i = 0; i < v.size(); ++i) {
@@ -228,11 +229,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
     for (size_t b = 0; b < matrixDim; ++b) {
       size_t col = bigIndex(a, b);
 
-      // initialize isSaturated to true. We'll mark the non-saturated things as
-      // false later
-      isSaturated(col) = true;
-      isAbsorbing(col) = false;
-
       Eigen::VectorXd aVec = Eigen::VectorXd::Zero(matrixDim);
       aVec(a) = 1;
       Eigen::VectorXd aPrimeVec = p * aVec;
@@ -243,9 +239,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
         }
         // Take union of sets
         size_t bPrime = a | b;
-        // if (bPrime != b) {
-        //   isSaturated(col) = false;
-        // }
         size_t row = bigIndex(aPrime, bPrime);
         Ts.emplace_back(row, col, aPrimeVec(aPrime));
         ancestors[row].push_back(col);
@@ -253,6 +246,7 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
     }
   }
 
+  Vector<bool> isSaturated = Vector<bool>::Ones(matrixDim * matrixDim);
   std::function<void(size_t)> markUnsaturated = [ancestors, &isSaturated,
                                                  &markUnsaturated](size_t ind) {
     isSaturated(ind) = false;
@@ -263,6 +257,7 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
     }
   };
 
+  S.setFromTriplets(Ts.begin(), Ts.end());
   for (int k = 0; k < S.outerSize(); ++k) {
     for (Eigen::SparseMatrix<double>::InnerIterator it(S, k); it; ++it) {
       size_t a, b, aPrime, bPrime;
@@ -270,10 +265,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
       std::tie(aPrime, bPrime) = bigUnindex(it.row());
 
       if (b != bPrime) {
-        if (isSaturated(it.col())) {
-          cerr << "impossible!" << endl;
-          exit(1);
-        }
         markUnsaturated(it.col());
       }
     }
@@ -292,11 +283,12 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
       }
     }
   }
+
+  Vector<bool> isAbsorbing = Vector<bool>::Zero(matrixDim * matrixDim);
   for (size_t b = 0; b < matrixDim; ++b) {
     isAbsorbing(bigIndex(0, b)) = true;
   }
 
-  S.setFromTriplets(Ts.begin(), Ts.end());
   U.setFromTriplets(Tu.begin(), Tu.end());
   Ts.clear();
   Tu.clear();
@@ -314,7 +306,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
   Eigen::SparseMatrix<double> IminusQ = (speye(Q.rows()) - Q).transpose();
   Eigen::SparseMatrix<double> X = solveSquare(IminusQ, Rt).transpose();
   Rt.resize(0, 0);
-  // cout << Rt << endl;
 
   Eigen::SparseMatrix<double> limit =
       reassembleMatrix(decomp, speye(decomp.AA.rows()), X);
@@ -322,12 +313,10 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
   // Check that limit is really limit
   Eigen::SparseMatrix<double> SUlimit = SU * limit;
   double err = (SUlimit - limit).norm();
-  cerr << "Limit error: " << err << endl;
   if (err > 1e-12) {
+    cerr << "Error: limit wrong somehow" << endl;
     exit(1);
   }
-
-  // cout << limit << endl;
 
   Eigen::SparseMatrix<double> smallLimit(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
@@ -341,14 +330,8 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
       std::tie(a, b) = bigUnindex(it.col());
       std::tie(aPrime, bPrime) = bigUnindex(it.row());
       if (aPrime == 0 && b == 0) {
-        // cout << "found one!  ";
         T.emplace_back(bPrime, a, it.value());
-      } else {
-        // cout << "bad one :'(";
       }
-      // cout << "\t a: " << a << "\tb: " << b << "\ta': " << aPrime
-      //      << "\tb': " << bPrime << "\tsaturated: " << isSaturated(it.col())
-      //      << "\tval: " << it.value() << endl;
     }
   }
 
@@ -368,20 +351,53 @@ TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) {
   for (size_t i = 0; i < 1 / tol; ++i) {
     s = amp(s, seq(pPow, s));
     pPow = seq(pPow, pPow);
+    normalize(s);
+    normalize(pPow);
   }
 
   return amp(s, skip());
 }
 
 // B[p*]
-TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, double tol) {
+TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, size_t iter) {
   TransitionMatrix s = skip();
-  TransitionMatrix pPow = p;
+  TransitionMatrix pn = p;
 
-  for (size_t i = 0; i < tol; ++i) {
-    s = amp(s, seq(pPow, s));
-    pPow = seq(pPow, p);
+  cout << "POWERS: Sn \t P^n" << endl;
+  for (size_t i = 0; i < iter; ++i) {
+    s = amp(s, pn);
+    normalize(s);
+
+    Eigen::MatrixXd C(p.rows(), 2 * p.rows() + 1);
+    C << Eigen::MatrixXd(s), -1 * Eigen::VectorXd::Ones(p.rows()),
+        Eigen::MatrixXd(pn);
+    cout << C << endl << endl;
+
+    pn = seq(p, pn);
+    normalize(pn);
   }
 
   return s;
+}
+
+// B[p*]
+TransitionMatrix PacketSet::worstStarApprox(TransitionMatrix p, size_t iter) {
+  TransitionMatrix s = skip();
+
+  for (size_t i = 0; i < iter; ++i) {
+    s = amp(skip(), seq(s, p));
+    normalize(s);
+  }
+
+  return s;
+}
+
+void PacketSet::normalize(TransitionMatrix &M) {
+  Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
+  Eigen::VectorXd colSums = ones.transpose() * M;
+  for (int k = 0; k < M.outerSize(); ++k) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(M, k); it; ++it) {
+      it.valueRef() /= colSums(it.col());
+    }
+  }
 }

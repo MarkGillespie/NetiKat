@@ -93,4 +93,20 @@ void ExpectMatEq(const Eigen::MatrixXd &a_, const Eigen::MatrixXd &b_,
                threshold);
 }
 
+Eigen::SparseMatrix<double> randomPositiveSparse(size_t n, double density) {
+  size_t entries = (size_t)(density * pow((double)n, 2));
+  std::vector<Eigen::Triplet<double>> T;
+
+  for (size_t iE = 0; iE < entries; ++iE) {
+    size_t row = rand() % n;
+    size_t col = rand() % n;
+    double entry = fRand(0, 5);
+
+    T.emplace_back(col, row, entry);
+  }
+  Eigen::SparseMatrix<double> M(n, n);
+  M.setFromTriplets(T.begin(), T.end());
+  return M;
+}
+
 #endif
