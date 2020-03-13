@@ -24,12 +24,15 @@ Eigen::SparseMatrix<double> randomDenseStochastic(size_t n) {
   Eigen::SparseMatrix<double> M(n, n);
   std::vector<Eigen::Triplet<double>> T;
 
-  for (size_t col = 0; col < n; ++col) {
+  T.emplace_back(0, 0, 1);
+  for (size_t col = 1; col < n; ++col) {
     Eigen::VectorXd v = Eigen::VectorXd::Random(n);
+    double sum = 0;
     for (size_t i = 0; i < n; ++i) {
       v(i) = abs(v(i));
+      sum += v(i);
     }
-    v /= v.lpNorm<1>();
+    v /= sum;
     for (size_t row = 0; row < n; ++row) {
       T.emplace_back(row, col, v(row));
     }
@@ -37,6 +40,12 @@ Eigen::SparseMatrix<double> randomDenseStochastic(size_t n) {
 
   M.setFromTriplets(T.begin(), T.end());
   return M;
+}
+
+bool isStochastic(Eigen::SparseMatrix<double> M) {
+  Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
+
+  return (M.transpose() * ones - ones).norm() < 1e-8;
 }
 
 // =============================================================

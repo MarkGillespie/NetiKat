@@ -38,6 +38,9 @@ public:
   Eigen::VectorXd toVec(const std::set<Packet> &packets);
   std::set<Packet> packetSetFromIndex(size_t idx);
 
+  size_t bigIndex(size_t i, size_t j);
+  std::pair<size_t, size_t> bigUnindex(size_t i);
+
   TransitionMatrix drop();
   TransitionMatrix skip();
 
@@ -65,4 +68,7 @@ public:
 
   // B[p*]
   TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-8);
+
+  // B[p*]
+  TransitionMatrix dumbStarApprox(TransitionMatrix p, double tol = 1e-8);
 };

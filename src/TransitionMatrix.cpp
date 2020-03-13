@@ -190,6 +190,12 @@ TransitionMatrix PacketSet::choice(double r, TransitionMatrix p,
   return r * p + (1 - r) * q;
 }
 
+size_t PacketSet::bigIndex(size_t i, size_t j) { return i + matrixDim * j; }
+
+std::pair<size_t, size_t> PacketSet::bigUnindex(size_t i) {
+  return std::make_pair(i % matrixDim, floor(i / matrixDim));
+}
+
 // TODO: clean up, write more tests
 // TODO: normalize columns after pruning small values?
 // B[p*]
@@ -202,11 +208,6 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
 
   Vector<bool> isSaturated(matrixDim * matrixDim);
   Vector<bool> isAbsorbing(matrixDim * matrixDim);
-
-  auto bigIndex = [&](size_t i, size_t j) { return i + matrixDim * j; };
-  auto bigUnindex = [&](size_t i) {
-    return std::make_pair(i % matrixDim, floor(i / matrixDim));
-  };
 
   auto nonzeros = [](Eigen::VectorXd v) {
     std::string out;
@@ -242,9 +243,9 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
         }
         // Take union of sets
         size_t bPrime = a | b;
-        if (bPrime != b) {
-          isSaturated(col) = false;
-        }
+        // if (bPrime != b) {
+        //   isSaturated(col) = false;
+        // }
         size_t row = bigIndex(aPrime, bPrime);
         Ts.emplace_back(row, col, aPrimeVec(aPrime));
         ancestors[row].push_back(col);
@@ -269,6 +270,10 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
       std::tie(aPrime, bPrime) = bigUnindex(it.row());
 
       if (b != bPrime) {
+        if (isSaturated(it.col())) {
+          cerr << "impossible!" << endl;
+          exit(1);
+        }
         markUnsaturated(it.col());
       }
     }
@@ -281,12 +286,14 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
       if (isSaturated(col)) {
         size_t row = bigIndex(0, b);
         Tu.emplace_back(row, col, 1);
-        isAbsorbing(row) = true;
       } else {
         size_t row = bigIndex(a, b);
         Tu.emplace_back(row, col, 1);
       }
     }
+  }
+  for (size_t b = 0; b < matrixDim; ++b) {
+    isAbsorbing(bigIndex(0, b)) = true;
   }
 
   S.setFromTriplets(Ts.begin(), Ts.end());
@@ -311,6 +318,14 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
 
   Eigen::SparseMatrix<double> limit =
       reassembleMatrix(decomp, speye(decomp.AA.rows()), X);
+
+  // Check that limit is really limit
+  Eigen::SparseMatrix<double> SUlimit = SU * limit;
+  double err = (SUlimit - limit).norm();
+  cerr << "Limit error: " << err << endl;
+  if (err > 1e-12) {
+    exit(1);
+  }
 
   // cout << limit << endl;
 
@@ -356,4 +371,17 @@ TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) {
   }
 
   return amp(s, skip());
+}
+
+// B[p*]
+TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, double tol) {
+  TransitionMatrix s = skip();
+  TransitionMatrix pPow = p;
+
+  for (size_t i = 0; i < tol; ++i) {
+    s = amp(s, seq(pPow, s));
+    pPow = seq(pPow, p);
+  }
+
+  return s;
 }
