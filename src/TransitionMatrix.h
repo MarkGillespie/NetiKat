@@ -62,4 +62,7 @@ public:
 
   // B[p*]
   TransitionMatrix star(TransitionMatrix p);
+
+  // B[p*]
+  TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-8);
 };

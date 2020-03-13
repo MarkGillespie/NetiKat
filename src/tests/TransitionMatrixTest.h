@@ -123,6 +123,18 @@ TEST_F(TransitionMatrixTest, Seq) {
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
 
+// This isn't true
+// TEST_F(TransitionMatrixTest, SeqDistributesOverAmp) {
+//   TransitionMatrix A = randomDenseStochastic(set->matrixDim);
+//   TransitionMatrix B = randomDenseStochastic(set->matrixDim);
+//   TransitionMatrix C = randomDenseStochastic(set->matrixDim);
+
+//   TransitionMatrix M1 = set->seq(A, set->amp(B, C));
+//   TransitionMatrix M2 = set->amp(set->seq(A, B), set->seq(A, C));
+
+//   EXPECT_MAT_NEAR(M1, M2, 1e-8);
+// }
+
 TEST_F(TransitionMatrixTest, Choice) {
   TransitionMatrix setZeroMat = set->set(0, 0);
   TransitionMatrix setOneMat = set->set(0, 1);
@@ -138,8 +150,20 @@ TEST_F(TransitionMatrixTest, Choice) {
   EXPECT_MAT_EQ(chosenVec, trueChosenVec);
 }
 
+TEST_F(TransitionMatrixTest, StarApprox) {
+  TransitionMatrix M = randomDenseStochastic(set->matrixDim);
+  // TransitionMatrix approxStarMat = set->starApprox(M, 1e-2);
+  TransitionMatrix approxStarMat = set->starApprox(M, -1);
+  TransitionMatrix starMat = set->star(M);
+
+  cout << approxStarMat << endl << endl << starMat << endl << endl;
+
+  EXPECT_MAT_NEAR(approxStarMat, starMat, 1e-12);
+}
+
 TEST_F(TransitionMatrixTest, Star) {
   TransitionMatrix setZeroMat = set->set(0, 0);
+
   TransitionMatrix starMat = set->star(setZeroMat);
   Eigen::VectorXd v = set->toVec(std::set<Packet>{std::vector<size_t>{1, 0}});
 
@@ -148,6 +172,5 @@ TEST_F(TransitionMatrixTest, Star) {
   Eigen::VectorXd trueStarVec = set->toVec(
       std::set<Packet>{std::vector<size_t>{0, 0}, std::vector<size_t>{1, 0}});
 
-  // TODO: not exact?
   EXPECT_MAT_NEAR(starVec, trueStarVec, 1e-12);
 }

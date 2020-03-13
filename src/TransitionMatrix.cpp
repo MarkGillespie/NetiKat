@@ -340,3 +340,20 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
   smallLimit.setFromTriplets(T.begin(), T.end());
   return smallLimit;
 }
+
+// B[p*]
+// p* is &_{i=0}^\infty p^i. We can approximate this by repeated squaring.
+// Let s_k = &_{i=1}^{2^k} p^i.
+// Then s_{k+1} = &_{i=1}^{2^{k+1}} p^i = s_k & (p^{2^k} * s_k)
+// Then we return s_N & 1 for some big N
+TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) {
+  TransitionMatrix s = p;
+  TransitionMatrix pPow = p;
+
+  for (size_t i = 0; i < 1 / tol; ++i) {
+    s = amp(s, seq(pPow, s));
+    pPow = seq(pPow, pPow);
+  }
+
+  return amp(s, skip());
+}

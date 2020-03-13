@@ -20,6 +20,25 @@ double fRand(double fMin, double fMax) {
   return fMin + f * (fMax - fMin);
 }
 
+Eigen::SparseMatrix<double> randomDenseStochastic(size_t n) {
+  Eigen::SparseMatrix<double> M(n, n);
+  std::vector<Eigen::Triplet<double>> T;
+
+  for (size_t col = 0; col < n; ++col) {
+    Eigen::VectorXd v = Eigen::VectorXd::Random(n);
+    for (size_t i = 0; i < n; ++i) {
+      v(i) = abs(v(i));
+    }
+    v /= v.lpNorm<1>();
+    for (size_t row = 0; row < n; ++row) {
+      T.emplace_back(row, col, v(row));
+    }
+  }
+
+  M.setFromTriplets(T.begin(), T.end());
+  return M;
+}
+
 // =============================================================
 //                Template Magic for Eigen
 // =============================================================
