@@ -32,50 +32,58 @@ public:
   size_t matrixDim;
   size_t possiblePackets;
 
-  size_t packetIndex(const Packet &p);
-  Packet packetFromIndex(size_t idx);
+  size_t packetIndex(const Packet &p) const;
+  Packet packetFromIndex(size_t idx) const;
 
-  size_t index(const std::set<Packet> &packets);
-  Eigen::VectorXd toVec(const std::set<Packet> &packets);
-  std::set<Packet> packetSetFromIndex(size_t idx);
+  size_t index(const std::set<Packet> &packets) const;
+  Eigen::VectorXd toVec(const std::set<Packet> &packets) const;
+  std::set<Packet> packetSetFromIndex(size_t idx) const;
 
-  size_t bigIndex(size_t i, size_t j);
-  std::pair<size_t, size_t> bigUnindex(size_t i);
+  size_t bigIndex(size_t i, size_t j) const;
+  std::pair<size_t, size_t> bigUnindex(size_t i) const;
 
-  TransitionMatrix drop();
-  TransitionMatrix skip();
+  TransitionMatrix drop() const;
+  TransitionMatrix skip() const;
 
   // B[fieldIndex = fieldValue]
-  TransitionMatrix test(size_t fieldIndex, size_t fieldValue);
+  TransitionMatrix test(size_t fieldIndex, size_t fieldValue) const;
 
   // B[#fieldIndex = fieldValue : n]
-  TransitionMatrix testSize(size_t fieldIndex, size_t fieldValue, size_t n);
+  TransitionMatrix testSize(size_t fieldIndex, size_t fieldValue,
+                            size_t n) const;
 
   // B[fieldIndex <- fieldValue]
-  TransitionMatrix set(size_t fieldIndex, size_t fieldValue);
+  TransitionMatrix set(size_t fieldIndex, size_t fieldValue) const;
 
   // B[p & q]
   // TODO: this is stupidly show
-  TransitionMatrix amp(TransitionMatrix p, TransitionMatrix q);
+  TransitionMatrix amp(TransitionMatrix p, TransitionMatrix q) const;
 
   // B[p;q]
-  TransitionMatrix seq(TransitionMatrix p, TransitionMatrix q);
+  TransitionMatrix seq(TransitionMatrix p, TransitionMatrix q) const;
 
   // B[p \oplus_r q]
-  TransitionMatrix choice(double r, TransitionMatrix p, TransitionMatrix q);
+  TransitionMatrix choice(double r, TransitionMatrix p,
+                          TransitionMatrix q) const;
 
   // B[p*]
-  TransitionMatrix star(TransitionMatrix p);
+  TransitionMatrix star(TransitionMatrix p) const;
 
   // B[p*]
-  TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-12);
+  // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
+  // less than tol
+  TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-12) const;
 
   // B[p*]
+  // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
+  // less than tol. Also returns how many iterations were needed
   TransitionMatrix starApprox(TransitionMatrix p, double tol,
-                              size_t &iterationsNeeded);
+                              size_t &iterationsNeeded) const;
 
   // B[p*]
-  TransitionMatrix dumbStarApprox(TransitionMatrix p, size_t iter);
+  // Computes B[p^(iter)]
+  TransitionMatrix dumbStarApprox(TransitionMatrix p, size_t iter) const;
 
-  void normalize(TransitionMatrix &M);
+  // Make M stochastic by normalizing its columns to sum to 1
+  void normalize(TransitionMatrix &M) const;
 };

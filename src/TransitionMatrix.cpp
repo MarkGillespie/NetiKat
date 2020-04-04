@@ -8,7 +8,7 @@ PacketSet::PacketSet(const PacketType &type_) : packetType(type_) {
   matrixDim = pow(2, possiblePackets);
 }
 
-size_t PacketSet::packetIndex(const Packet &p) {
+size_t PacketSet::packetIndex(const Packet &p) const {
   size_t idx = 0;
 
   size_t offset = 1;
@@ -20,7 +20,7 @@ size_t PacketSet::packetIndex(const Packet &p) {
   return idx;
 }
 
-Packet PacketSet::packetFromIndex(size_t idx) {
+Packet PacketSet::packetFromIndex(size_t idx) const {
   Packet p;
 
   for (size_t iF = 0; iF < packetType.size(); ++iF) {
@@ -32,7 +32,7 @@ Packet PacketSet::packetFromIndex(size_t idx) {
   return p;
 }
 
-size_t PacketSet::index(const std::set<Packet> &packets) {
+size_t PacketSet::index(const std::set<Packet> &packets) const {
   size_t idx = 0;
   for (const Packet &p : packets) {
     idx |= 1 << packetIndex(p);
@@ -40,14 +40,14 @@ size_t PacketSet::index(const std::set<Packet> &packets) {
   return idx;
 }
 
-Eigen::VectorXd PacketSet::toVec(const std::set<Packet> &packets) {
+Eigen::VectorXd PacketSet::toVec(const std::set<Packet> &packets) const {
   size_t pIdx = index(packets);
   Eigen::VectorXd v = Eigen::VectorXd::Zero(matrixDim);
   v(pIdx) = 1;
   return v;
 }
 
-std::set<Packet> PacketSet::packetSetFromIndex(size_t idx) {
+std::set<Packet> PacketSet::packetSetFromIndex(size_t idx) const {
   std::set<Packet> packets;
 
   for (size_t iP = 0; iP < possiblePackets; ++iP) {
@@ -60,7 +60,7 @@ std::set<Packet> PacketSet::packetSetFromIndex(size_t idx) {
   return packets;
 }
 
-TransitionMatrix PacketSet::drop() {
+TransitionMatrix PacketSet::drop() const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
@@ -72,10 +72,10 @@ TransitionMatrix PacketSet::drop() {
   return M;
 }
 
-TransitionMatrix PacketSet::skip() { return speye(matrixDim); }
+TransitionMatrix PacketSet::skip() const { return speye(matrixDim); }
 
 // B[fieldIndex = fieldValue]
-TransitionMatrix PacketSet::test(size_t fieldIndex, size_t fieldValue) {
+TransitionMatrix PacketSet::test(size_t fieldIndex, size_t fieldValue) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
@@ -96,7 +96,7 @@ TransitionMatrix PacketSet::test(size_t fieldIndex, size_t fieldValue) {
 
 // B[#fieldIndex = fieldValue : n]
 TransitionMatrix PacketSet::testSize(size_t fieldIndex, size_t fieldValue,
-                                     size_t n) {
+                                     size_t n) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
@@ -121,7 +121,7 @@ TransitionMatrix PacketSet::testSize(size_t fieldIndex, size_t fieldValue,
 }
 
 // B[fieldIndex <- fieldValue]
-TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) {
+TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
@@ -140,7 +140,7 @@ TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) {
 }
 
 // B[p & q]
-TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) {
+TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) const {
 
   // Sort nonzero entries by "a" value
   // Map each a to {(b, val)}
@@ -184,26 +184,28 @@ TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) {
 }
 
 // B[p;q]
-TransitionMatrix PacketSet::seq(TransitionMatrix p, TransitionMatrix q) {
+TransitionMatrix PacketSet::seq(TransitionMatrix p, TransitionMatrix q) const {
   return p * q;
 }
 
 // B[p \oplus_r q]
 TransitionMatrix PacketSet::choice(double r, TransitionMatrix p,
-                                   TransitionMatrix q) {
+                                   TransitionMatrix q) const {
   return r * p + (1 - r) * q;
 }
 
-size_t PacketSet::bigIndex(size_t i, size_t j) { return i + matrixDim * j; }
+size_t PacketSet::bigIndex(size_t i, size_t j) const {
+  return i + matrixDim * j;
+}
 
-std::pair<size_t, size_t> PacketSet::bigUnindex(size_t i) {
+std::pair<size_t, size_t> PacketSet::bigUnindex(size_t i) const {
   return std::make_pair(i % matrixDim, floor(i / matrixDim));
 }
 
 // TODO: clean up, write more tests
 // TODO: normalize columns after pruning small values?
 // B[p*]
-TransitionMatrix PacketSet::star(TransitionMatrix p) {
+TransitionMatrix PacketSet::star(TransitionMatrix p) const {
 
   Eigen::SparseMatrix<double> S(matrixDim * matrixDim, matrixDim * matrixDim);
   Eigen::SparseMatrix<double> U(matrixDim * matrixDim, matrixDim * matrixDim);
@@ -340,14 +342,14 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
 }
 
 // B[p*]
-TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) {
+TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) const {
   size_t temp;
   return starApprox(p, tol, temp);
 }
 
 // B[p*]
 TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol,
-                                       size_t &iterationsNeeded) {
+                                       size_t &iterationsNeeded) const {
   TransitionMatrix oldS = skip();
   TransitionMatrix s = amp(skip(), seq(oldS, p));
   iterationsNeeded = 1;
@@ -363,7 +365,8 @@ TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol,
 }
 
 // B[p*]
-TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, size_t iter) {
+TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p,
+                                           size_t iter) const {
   TransitionMatrix s = skip();
 
   for (size_t i = 0; i < iter; ++i) {
@@ -374,7 +377,7 @@ TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, size_t iter) {
   return s;
 }
 
-void PacketSet::normalize(TransitionMatrix &M) {
+void PacketSet::normalize(TransitionMatrix &M) const {
   Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
   Eigen::VectorXd colSums = ones.transpose() * M;
   for (int k = 0; k < M.outerSize(); ++k) {
