@@ -340,48 +340,30 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) {
 }
 
 // B[p*]
-// p* is &_{i=0}^\infty p^i. We can approximate this by repeated squaring.
-// Let s_k = &_{i=1}^{2^k} p^i.
-// Then s_{k+1} = &_{i=1}^{2^{k+1}} p^i = s_k & (p^{2^k} * s_k)
-// Then we return s_N & 1 for some big N
 TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) {
-  TransitionMatrix s = p;
-  TransitionMatrix pPow = p;
-
-  for (size_t i = 0; i < 1 / tol; ++i) {
-    s = amp(s, seq(pPow, s));
-    pPow = seq(pPow, pPow);
-    normalize(s);
-    normalize(pPow);
-  }
-
-  return amp(s, skip());
+  size_t temp;
+  return starApprox(p, tol, temp);
 }
 
 // B[p*]
-TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, size_t iter) {
-  TransitionMatrix s = skip();
-  TransitionMatrix pn = p;
+TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol,
+                                       size_t &iterationsNeeded) {
+  TransitionMatrix oldS = skip();
+  TransitionMatrix s = amp(skip(), seq(oldS, p));
+  iterationsNeeded = 1;
 
-  cout << "POWERS: Sn \t P^n" << endl;
-  for (size_t i = 0; i < iter; ++i) {
-    s = amp(s, pn);
+  while ((s - oldS).norm() > tol) {
+    oldS = s;
+    s = amp(skip(), seq(s, p));
     normalize(s);
-
-    Eigen::MatrixXd C(p.rows(), 2 * p.rows() + 1);
-    C << Eigen::MatrixXd(s), -1 * Eigen::VectorXd::Ones(p.rows()),
-        Eigen::MatrixXd(pn);
-    cout << C << endl << endl;
-
-    pn = seq(p, pn);
-    normalize(pn);
+    iterationsNeeded++;
   }
 
   return s;
 }
 
 // B[p*]
-TransitionMatrix PacketSet::worstStarApprox(TransitionMatrix p, size_t iter) {
+TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p, size_t iter) {
   TransitionMatrix s = skip();
 
   for (size_t i = 0; i < iter; ++i) {

@@ -68,13 +68,14 @@ public:
   TransitionMatrix star(TransitionMatrix p);
 
   // B[p*]
-  TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-8);
+  TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-12);
+
+  // B[p*]
+  TransitionMatrix starApprox(TransitionMatrix p, double tol,
+                              size_t &iterationsNeeded);
 
   // B[p*]
   TransitionMatrix dumbStarApprox(TransitionMatrix p, size_t iter);
-
-  // B[p*]
-  TransitionMatrix worstStarApprox(TransitionMatrix p, size_t iter);
 
   void normalize(TransitionMatrix &M);
 };
