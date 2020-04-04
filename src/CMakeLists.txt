@@ -11,6 +11,13 @@ add_library(
 target_link_libraries(Packets eigen)
 
 add_executable(
+  benchmark
+  benchmark.cpp
+)
+target_include_directories(benchmark PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+target_link_libraries(benchmark Packets)
+
+add_executable(
   run
   main.cpp
 )
