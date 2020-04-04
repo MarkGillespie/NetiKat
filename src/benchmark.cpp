@@ -2,7 +2,7 @@
 
 #include <stdlib.h> /* rand */
 
-std::vector<size_t> packetType{2, 2, 2};
+std::vector<size_t> packetType{2, 2, 2, 2};
 PacketSet set = PacketSet(packetType);
 
 // Generate a random floating point number between fMin and fMax
@@ -11,29 +11,25 @@ double fRand(double fMin, double fMax) {
   return fMin + f * (fMax - fMin);
 }
 
-// Generate a random stochastic matrix of size nxn with approximately a fill
-// fraction of the entries being nonzero.
-// Default fill value is 0.1
-Eigen::SparseMatrix<double> randomStochastic(size_t n, double fill = 0.1) {
+// Generate a random stochastic matrix of size nxn with entriesPerCol nonzero
+// entries per column. Default value of entriesPerCol is 24
+Eigen::SparseMatrix<double> randomStochastic(size_t n,
+                                             size_t entriesPerCol = 24) {
   Eigen::SparseMatrix<double> M(n, n);
   std::vector<Eigen::Triplet<double>> T;
-
-  size_t entriesPerCol = ceil(n * fill);
-
+  T.reserve(entriesPerCol * n);
   T.emplace_back(0, 0, 1);
+
+  std::vector<double> entries(entriesPerCol);
   for (size_t col = 1; col < n; ++col) {
     double sum = 0;
-    std::vector<double> entries;
-    std::vector<size_t> rows;
-    entries.reserve(entriesPerCol);
-    rows.reserve(entriesPerCol);
     for (size_t i = 0; i < entriesPerCol; ++i) {
-      rows.push_back(rand() % n);
-      entries.push_back(fRand(0, 1));
+      entries[i] = fRand(0, 1);
       sum += entries[i];
     }
     for (size_t i = 0; i < entriesPerCol; ++i) {
-      T.emplace_back(rows[i], col, entries[i] / sum);
+      size_t row = rand() % n;
+      T.emplace_back(row, col, entries[i] / sum);
     }
   }
 
@@ -46,9 +42,13 @@ void benchmark(const PacketSet &set) {
   std::clock_t start;
   double duration;
 
+  cout << "Generating Random Matrices . . ." << endl;
+
   // TODO: sample sparse stochastic matrices
-  p = randomStochastic(set.matrixDim, 0.1);
-  q = randomStochastic(set.matrixDim, 0.1);
+  p = randomStochastic(set.matrixDim);
+  q = randomStochastic(set.matrixDim);
+
+  cout << "Beginning Test" << endl;
 
   // Skip
   start = std::clock();
@@ -114,14 +114,6 @@ void benchmark(const PacketSet &set) {
        << set.matrixDim << endl
        << endl;
 
-  // star
-  start = std::clock();
-  M = set.star(p);
-  duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Star took " << duration << "s on matrices of size " << set.matrixDim
-       << endl
-       << endl;
-
   // starApprox
   start = std::clock();
   M = set.starApprox(p, 1e-12);
@@ -129,9 +121,36 @@ void benchmark(const PacketSet &set) {
   cout << "StarApprox(1e-12) took " << duration << "s on matrices of size "
        << set.matrixDim << endl
        << endl;
+
+  // star
+  start = std::clock();
+  M = set.star(p);
+  duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+  cout << "Star took " << duration << "s on matrices of size " << set.matrixDim
+       << endl
+       << endl;
+}
+
+void starParameterSweep() {
+  cout << "Packet Size \t Matrix Size \t Entries per Column \t Time (s)"
+       << endl;
+
+  for (size_t n = 0; n < 16; ++n) {
+    PacketSet set = PacketSet(std::vector<size_t>{n});
+    for (size_t entries = 2; entries < std::min(set.matrixDim, (size_t)16);
+         ++entries) {
+      TransitionMatrix p = randomStochastic(set.matrixDim, entries);
+      std::clock_t start = std::clock();
+      set.star(p);
+      double duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+      cout << n << "\t" << set.matrixDim << "\t" << entries << "\t" << duration
+           << endl;
+    }
+  }
 }
 
 int main() {
-  benchmark(set);
+  // benchmark(set);
+  starParameterSweep();
   return 0;
 }
