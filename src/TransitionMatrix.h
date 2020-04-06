@@ -7,10 +7,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include <bitset>
+
 #include <Eigen/Dense>
 #include <Eigen/SparseCore>
 
 #include "linear_algebra_utilities.h"
+#include "utils.h"
 
 using std::cerr;
 using std::cout;
@@ -26,11 +29,17 @@ using Packet = std::vector<size_t>;
 
 class PacketSet {
 public:
-  PacketSet(const PacketType &type_);
+  PacketSet(const PacketType &type_, size_t maxNumPackets_ = 4);
 
   PacketType packetType;
   size_t matrixDim;
   size_t possiblePackets;
+  size_t maxNumPackets;
+
+  // numPacketSetsOfSizeLessThan[i] is the number of packet sets of size less
+  // than i
+  // This is useful when indexing packet sets
+  std::vector<size_t> numPacketSetsOfSizeLessThan;
 
   size_t packetIndex(const Packet &p) const;
   Packet packetFromIndex(size_t idx) const;
@@ -39,8 +48,19 @@ public:
   Eigen::VectorXd toVec(const std::set<Packet> &packets) const;
   std::set<Packet> packetSetFromIndex(size_t idx) const;
 
+  // Takes an index of a packet set using the naive scheme (i.e. an n-bit
+  // integer) and compresses it into an index into the collection of packets of
+  // size at most maxNumPackets
+  // idx is the uncompressed index and k is the number of packets in the set
+  size_t compressIndex(size_t idx, size_t k) const;
+  size_t decompressIndex(size_t idx) const;
+
   size_t bigIndex(size_t i, size_t j) const;
   std::pair<size_t, size_t> bigUnindex(size_t i) const;
+
+  // Compute the union of the packet set with index a and the packet set with
+  // index b
+  size_t packetSetUnion(size_t a, size_t b) const;
 
   TransitionMatrix drop() const;
   TransitionMatrix skip() const;

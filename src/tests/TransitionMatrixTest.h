@@ -1,4 +1,7 @@
 #include "TransitionMatrix.h"
+#include "utils.h"
+
+#include <bitset>
 
 class TransitionMatrixTest : public testing::Test {
 public:
@@ -6,8 +9,8 @@ public:
 
 protected:
   static void SetUpTestSuite() {
-    std::vector<size_t> packetType{2};
-    set = std::unique_ptr<PacketSet>(new PacketSet(packetType));
+    std::vector<size_t> packetType{2, 2};
+    set = std::unique_ptr<PacketSet>(new PacketSet(packetType, 4));
   }
 
   void SetUp() override {}
@@ -20,6 +23,13 @@ std::unique_ptr<PacketSet> TransitionMatrixTest::set = nullptr;
 // ============================================
 //        TransitionMatrix Tests
 // ============================================
+TEST_F(TransitionMatrixTest, binomialCoefficients) {
+  size_t nCk = binom(56, 12);
+  size_t answer = 558383307300; // Solution computed in Mathematica
+
+  EXPECT_EQ(nCk, answer);
+}
+
 TEST_F(TransitionMatrixTest, normalizedMatrixIsStochastic) {
   size_t dim = 10;
   TransitionMatrix A = randomPositiveSparse(dim, 0.5);
@@ -36,6 +46,36 @@ TEST_F(TransitionMatrixTest, indexOfPacketFromIndexIsIdentity) {
     size_t newIndex = set->packetIndex(set->packetFromIndex(iP));
     EXPECT_EQ(iP, newIndex);
   }
+}
+
+TEST_F(TransitionMatrixTest, compressDecompressIndexIsIdentity) {
+  std::vector<size_t> biggerPacketType{4, 4};
+  PacketSet bigSet(biggerPacketType, 3);
+
+  for (size_t iS = 0; iS < bigSet.matrixDim; iS++) {
+    size_t decompressedIndex = bigSet.decompressIndex(iS);
+    size_t nOnes = countOnes(decompressedIndex);
+    size_t newIdx = bigSet.compressIndex(decompressedIndex, nOnes);
+
+    ASSERT_EQ(iS, newIdx);
+  }
+}
+
+TEST_F(TransitionMatrixTest, decompressCompressIndexIsIdentity) {
+  std::vector<size_t> biggerPacketType{4, 4, 4, 4};
+  PacketSet bigSet(biggerPacketType, 4);
+
+  size_t idx = 6;
+  size_t compressedIndex = bigSet.compressIndex(idx, 2);
+  size_t newIdx = bigSet.decompressIndex(compressedIndex);
+
+  EXPECT_EQ(idx, newIdx);
+}
+
+TEST_F(TransitionMatrixTest, zeroCompressesToZero) {
+  size_t zeroIdx = set->compressIndex(0, 0);
+
+  EXPECT_EQ(zeroIdx, 0);
 }
 
 TEST_F(TransitionMatrixTest, indexOfPacketSetFromIndexIsIdentity) {

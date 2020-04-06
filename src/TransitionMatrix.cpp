@@ -1,11 +1,23 @@
 #include "TransitionMatrix.h"
 
-PacketSet::PacketSet(const PacketType &type_) : packetType(type_) {
+PacketSet::PacketSet(const PacketType &type_, size_t maxNumPackets_)
+    : packetType(type_), maxNumPackets(maxNumPackets_) {
   possiblePackets = 1;
   for (size_t fieldSize : packetType) {
     possiblePackets *= fieldSize;
   }
-  matrixDim = pow(2, possiblePackets);
+
+  numPacketSetsOfSizeLessThan.reserve(maxNumPackets + 1);
+  numPacketSetsOfSizeLessThan.push_back(0);
+  for (size_t i = 1; i <= maxNumPackets; ++i) {
+    // The number of packet sets of size less than i is the number of packet
+    // sets of size less than i-1 plus the number of packet sets of size exactly
+    // i-1
+    numPacketSetsOfSizeLessThan.push_back(numPacketSetsOfSizeLessThan[i - 1] +
+                                          binom(possiblePackets, i - 1));
+  }
+  matrixDim = numPacketSetsOfSizeLessThan[maxNumPackets] +
+              binom(possiblePackets, maxNumPackets);
 }
 
 size_t PacketSet::packetIndex(const Packet &p) const {
@@ -37,7 +49,8 @@ size_t PacketSet::index(const std::set<Packet> &packets) const {
   for (const Packet &p : packets) {
     idx |= 1 << packetIndex(p);
   }
-  return idx;
+  return compressIndex(idx, packets.size());
+  // return idx// ;
 }
 
 Eigen::VectorXd PacketSet::toVec(const std::set<Packet> &packets) const {
@@ -49,15 +62,73 @@ Eigen::VectorXd PacketSet::toVec(const std::set<Packet> &packets) const {
 
 std::set<Packet> PacketSet::packetSetFromIndex(size_t idx) const {
   std::set<Packet> packets;
+  size_t decompressedIndex = decompressIndex(idx);
+  // size_t decompressedIndex = idx;
 
+  // TODO: this creates a lot of extra work. Just loop over possible packet sets
   for (size_t iP = 0; iP < possiblePackets; ++iP) {
-    if ((idx & 1) == 1) {
+    if ((decompressedIndex & 1) == 1) {
       packets.insert(packetFromIndex(iP));
+    }
+    decompressedIndex = decompressedIndex >> 1;
+  }
+
+  return packets;
+}
+
+// Takes an index of a packet set using the naive scheme (i.e. an n-bit
+// integer) and compresses it into an index into the collection of packets of
+// size at most maxNumPackets
+// idx is the uncompressed index and k is the number of packets in the set
+size_t PacketSet::compressIndex(size_t idx, size_t k) const {
+  if (k > maxNumPackets) {
+    return 0;
+  }
+
+  // Index of packet set among sets of size k
+  size_t peerIndex = 0;
+
+  size_t onesSoFar = 0;
+  for (size_t iP = 0; iP < possiblePackets && onesSoFar != k; ++iP) {
+    if ((idx & 1) == 1) {
+      onesSoFar++;
+    } else {
+      // idx is the uncompressed index
+      // If there's a zero in position iP, you're behind all of the packets that
+      // have a 1 there instead
+      peerIndex += binom(possiblePackets - iP - 1, k - onesSoFar - 1);
     }
     idx = idx >> 1;
   }
 
-  return packets;
+  return peerIndex + numPacketSetsOfSizeLessThan[k];
+}
+
+size_t PacketSet::decompressIndex(size_t idx) const {
+  size_t nPackets = 0;
+  while (nPackets + 1 <= maxNumPackets &&
+         numPacketSetsOfSizeLessThan[nPackets + 1] <= idx) {
+    nPackets++;
+  }
+  size_t nPeers = binom(possiblePackets, nPackets);
+
+  size_t peerIndex = idx - numPacketSetsOfSizeLessThan[nPackets];
+  size_t reconstructedIndex = 0;
+  size_t packetsLeft = nPackets;
+  for (size_t iP = 0; iP < possiblePackets - packetsLeft && packetsLeft != 0;
+       ++iP) {
+    size_t nextTerm = binom(possiblePackets - iP - 1, packetsLeft);
+    if (peerIndex < nPeers - nextTerm) {
+      reconstructedIndex |= 1 << iP;
+      packetsLeft -= 1;
+      nPeers -= nextTerm;
+    }
+  }
+  for (size_t iP = possiblePackets - packetsLeft; iP < possiblePackets; ++iP) {
+    reconstructedIndex |= 1 << iP;
+  }
+
+  return reconstructedIndex;
 }
 
 TransitionMatrix PacketSet::drop() const {
@@ -139,6 +210,13 @@ TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) const {
   return M;
 }
 
+size_t PacketSet::packetSetUnion(size_t a, size_t b) const {
+  std::set<Packet> p = packetSetFromIndex(a);
+  std::set<Packet> q = packetSetFromIndex(b);
+  p.insert(std::begin(q), std::end(q));
+  return index(p);
+}
+
 // B[p & q]
 TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) const {
 
@@ -171,7 +249,7 @@ TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) const {
         std::tie(bQ, valQ) = qPair;
 
         if (valP * valQ > 1e-12) {
-          size_t packetUnion = bP | bQ;
+          size_t packetUnion = packetSetUnion(bP, bQ);
           T.emplace_back(packetUnion, a, valP * valQ);
         }
       }
@@ -240,7 +318,7 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) const {
           continue;
         }
         // Take union of sets
-        size_t bPrime = a | b;
+        size_t bPrime = packetSetUnion(a, b);
         size_t row = bigIndex(aPrime, bPrime);
         Ts.emplace_back(row, col, aPrimeVec(aPrime));
         ancestors[row].push_back(col);
