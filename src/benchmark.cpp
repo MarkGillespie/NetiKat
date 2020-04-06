@@ -1,6 +1,7 @@
 #include "TransitionMatrix.h"
 
-#include <stdlib.h> /* rand */
+#include <stdlib.h> /* rand, malloc */
+#include <sys/mman.h>
 
 std::vector<size_t> packetType{2, 2, 2, 2};
 PacketSet set = PacketSet(packetType);
@@ -20,8 +21,30 @@ Eigen::SparseMatrix<double> randomStochastic(size_t n,
   T.reserve(entriesPerCol * n);
   T.emplace_back(0, 0, 1);
 
+  // Eigen::Triplet<double> *T = new Eigen::Triplet<double>[entriesPerCol * n];
+  // cout << "Triplet size: " << sizeof(Eigen::Triplet<double>) << endl;
+  // Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)malloc(
+  //     entriesPerCol * n * sizeof(Eigen::Triplet<double>));
+
+  // void *mem = malloc(pow(2, 64) * sizeof(Eigen::Triplet<double>));
+  // void *mem = malloc(pow(2, 5000) * sizeof(int));
+
+  // if (mem == NULL) {
+  //   cout << "Failed to allocate enough memory" << endl;
+  //   exit(1);
+  // } else {
+  //   cout << "Succeeded in allocating memory" << endl;
+  // }
+  // Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)mem;
+
   std::vector<double> entries(entriesPerCol);
+  size_t count = 0;
+  Eigen::Triplet<double> trip;
   for (size_t col = 1; col < n; ++col) {
+    if (fmod(col, pow(2, 24)) == 0) {
+      cout << "col = " << col << " of " << n << " ( "
+           << ((double)col / (double)n) * 100 << "%)" << endl;
+    }
     double sum = 0;
     for (size_t i = 0; i < entriesPerCol; ++i) {
       entries[i] = fRand(0, 1);
@@ -30,10 +53,16 @@ Eigen::SparseMatrix<double> randomStochastic(size_t n,
     for (size_t i = 0; i < entriesPerCol; ++i) {
       size_t row = rand() % n;
       T.emplace_back(row, col, entries[i] / sum);
+      // trip = Eigen::Triplet<double>(row, col, entries[i] / sum);
+      // T[count++] = trip;
     }
   }
 
-  M.setFromTriplets(T.begin(), T.end());
+  M.setFromTriplets(std::begin(T), std::end(T));
+  // M.setFromTriplets(T, T + entriesPerCol * n);
+
+  // delete[] T;
+  // free(T);
   return M;
 }
 
@@ -132,25 +161,130 @@ void benchmark(const PacketSet &set) {
 }
 
 void starParameterSweep() {
-  cout << "Packet Size \t Matrix Size \t Entries per Column \t Time (s)"
+  cout << "Packet Size \t Matrix Size \t Entries per Column \t Time "
+          "(s)\tIterations"
        << endl;
 
-  for (size_t n = 0; n < 16; ++n) {
+  for (size_t n = 1; n < 64; n *= 2) {
     PacketSet set = PacketSet(std::vector<size_t>{n});
     for (size_t entries = 2; entries < std::min(set.matrixDim, (size_t)16);
-         ++entries) {
+         entries *= 2) {
       TransitionMatrix p = randomStochastic(set.matrixDim, entries);
       std::clock_t start = std::clock();
-      set.star(p);
+      // set.star(p);
+      size_t iterations;
+      set.starApprox(p, 1e-8, iterations);
       double duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
       cout << n << "\t" << set.matrixDim << "\t" << entries << "\t" << duration
-           << endl;
+           << "\t" << iterations << endl;
     }
   }
 }
 
+bool testAlloc(size_t n) {
+  char *array = (char *)malloc(n * sizeof(char));
+  if (array == NULL)
+    return false;
+
+  for (size_t i = 0; i < n; ++i) {
+    array[i] = 12;
+  }
+
+  free(array);
+  return true;
+}
+
+bool testMMapAlloc(size_t n) {
+  size_t bufferSize = n * sizeof(char);
+  void *addr = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (addr == MAP_FAILED)
+    return false;
+
+  char *array = (char *)addr;
+
+  for (size_t i = 0; i < n; ++i) {
+    array[i] = 12;
+  }
+
+  munmap(addr, bufferSize);
+  return true;
+}
+
+bool testTripletVectorAlloc(size_t n) {
+  std::vector<Eigen::Triplet<double>> T;
+  T.reserve(n);
+  for (size_t iT = 0; iT < n; ++iT) {
+    T.emplace_back(0, 0, 1);
+  }
+  return true;
+}
+
+bool testSneakyTripletAlloc(size_t n) {
+
+  int nBytes = n * (2 * sizeof(int) + sizeof(double));
+
+  char *array = (char *)malloc(nBytes);
+
+  if (array == NULL)
+    return false;
+
+  int *intArray = (int *)array;
+  double *doubleArray = (double *)array;
+
+  for (size_t iT = 0; iT < n; ++iT) {
+    intArray[4 * iT] = iT;          // row
+    intArray[4 * iT + 1] = iT;      // col
+    doubleArray[2 * iT + 1] = 3.14; // value;
+  }
+
+  Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)array;
+  Eigen::SparseMatrix<double> M(n, n);
+  M.setFromTriplets(T, T + n);
+  free(array);
+
+  cout << M.coeffRef(0, 0) << "\t" << M.coeffRef(1, 0);
+
+  return true;
+}
+
+size_t maxMemoryAllocation() {
+
+  cout << 2 * sizeof(int) + sizeof(double) << "\t" << sizeof(char) << endl;
+  size_t maxMem = pow(2, 26);
+  while (testMMapAlloc(maxMem) && maxMem * 2 > maxMem) {
+    cout << "Successfully allocated " << maxMem << " bytes\t" << log2(maxMem)
+         << endl;
+    maxMem *= 2;
+  }
+
+  cout << endl;
+  maxMem = pow(2, 26);
+  // while (testAlloc(maxMem) && maxMem * 2 > maxMem) {
+  // while (testTripletVectorAlloc(maxMem) && maxMem * 2 > maxMem) {
+  while (testSneakyTripletAlloc(maxMem) && maxMem * 2 > maxMem) {
+    cout << "Successfully allocated " << maxMem << " Triplets\t" << log2(maxMem)
+         << endl;
+    maxMem *= 2;
+  }
+
+  return maxMem;
+}
+
 int main() {
   // benchmark(set);
-  starParameterSweep();
+  // starParameterSweep();
+
+  // size_t n = 27;
+  // size_t entries = 4;
+  // PacketSet set = PacketSet(std::vector<size_t>{n});
+  // cout << "Constructing Matrix" << endl;
+  // TransitionMatrix p = randomStochastic(set.matrixDim, entries);
+  // size_t iterations;
+  // cout << "Computing star" << endl;
+  // set.starApprox(p, 1e-8, iterations);
+
+  maxMemoryAllocation();
+
   return 0;
 }
