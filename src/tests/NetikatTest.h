@@ -69,7 +69,12 @@ TEST_F(NetikatTest, indexOfPacketFromIndexIsIdentity) {
 
 TEST_F(NetikatTest, indexOfPacketSetFromIndexIsIdentity) {
   for (size_t iP = 0; iP < neti->matrixDim; ++iP) {
-    size_t newIndex = neti->index(neti->packetSetFromIndex(iP));
+    // cout << "about to run first part" << endl;
+    auto pSet = neti->packetSetFromIndex(iP);
+    // cout << "packet set: " << pSet << endl;
+    // cout << "about to run second part" << endl;
+    size_t newIndex = neti->index(pSet);
+
     ASSERT_EQ(iP, newIndex);
   }
 }

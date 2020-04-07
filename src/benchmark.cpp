@@ -3,8 +3,8 @@
 int main() {
 
   NetiKAT<double, 64> neti(4);
-  // cout << "Matrix size: " << neti.matrixDim << endl;
-  // benchmark(neti);
+  cout << "Matrix size: " << neti.matrixDim << endl;
+  benchmark(neti);
   // starParameterSweep();
 
   // size_t n = 32;

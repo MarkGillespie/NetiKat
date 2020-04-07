@@ -81,17 +81,26 @@ Packet NetiKAT<T, ns...>::packetFromIndex(size_t idx) const {
 template <typename T, size_t... ns>
 size_t NetiKAT<T, ns...>::index(const PacketSet &packets) const {
 
-  if (packets.size() > maxNumPackets) {
+  std::vector<size_t> presentIndices;
+  // TODO: don't loop over all packets
+  // for (size_t iP : packets) {
+  //   presentIndices.push_back(iP);
+  // }
+  for (size_t iP = 0; iP < possiblePackets; ++iP) {
+    if (packets[iP]) {
+      presentIndices.push_back(iP);
+    }
+  }
+  if (presentIndices.size() > maxNumPackets) {
     return 0;
   }
+  size_t nPackets = presentIndices.size();
 
-  // TODO: will iterating over the set iterate in sorted order?
-  std::vector<size_t> presentIndices;
-  presentIndices.reserve(packets.size());
-  for (size_t pIdx : packets) {
-    presentIndices.push_back(pIdx);
-  }
-  std::sort(std::begin(presentIndices), std::end(presentIndices));
+  // cout << "present indices: ";
+  // for (size_t iP : presentIndices) {
+  //   cout << iP << "\t";
+  // }
+  // cout << endl;
 
   // Index of packet set among sets of same size
   size_t peerIndex = 0;
@@ -101,19 +110,19 @@ size_t NetiKAT<T, ns...>::index(const PacketSet &packets) const {
   // doesn't matter since -1 is still the additive inverse of 1 even when
   // working with unsigned ints
   size_t prevIdx = -1;
-  for (size_t iIdx = 0; iIdx < packets.size(); ++iIdx) {
+  for (size_t iIdx = 0; iIdx < presentIndices.size(); ++iIdx) {
     size_t packetIdx = presentIndices[iIdx];
     for (size_t iSkip = prevIdx + 1; iSkip < packetIdx; ++iSkip) {
       // If there's a zero in position iSkip, you're behind all of the packets
       // that have a 1 there instead, and thus have (packets.size() - iIdx) ones
       // in the last few positions
-      peerIndex += binomialCoefficient(possiblePackets - iSkip - 1,
-                                       packets.size() - iIdx - 1);
+      peerIndex +=
+          binomialCoefficient(possiblePackets - iSkip - 1, nPackets - iIdx - 1);
     }
     prevIdx = packetIdx;
   }
 
-  return peerIndex + numNetiKATsOfSizeLessThan[packets.size()];
+  return peerIndex + numNetiKATsOfSizeLessThan[nPackets];
 }
 
 template <typename T, size_t... ns>
@@ -145,17 +154,21 @@ NetiKAT<T, ns...>::packetSetFromIndex(size_t idx) const {
     size_t nextTerm =
         binomialCoefficient(possiblePackets - iP - 1, packetsLeft);
     if (peerIndex < nPeers - nextTerm) {
-      packets.insert(iP);
+      packets[iP] = true;
+      // packets.insert(iP);
+
       packetsLeft -= 1;
       nPeers -= nextTerm;
     }
   }
   for (size_t iP = possiblePackets - packetsLeft; iP < possiblePackets; ++iP) {
-    packets.insert(iP);
+    packets[iP] = true;
+    // packets.insert(iP);
   }
 
   return packets;
 }
+
 template <typename T, size_t... ns>
 template <typename... S>
 typename NetiKAT<T, ns...>::PacketSet
@@ -163,8 +176,8 @@ NetiKAT<T, ns...>::packetSetFromPacketIndices(S... indices) const {
   std::vector<size_t> indexList{indices...};
   PacketSet pSet;
   for (size_t idx : indexList) {
-    pSet.insert(idx);
-    // pSet[idx = true];
+    // pSet.insert(idx);
+    pSet[idx] = true;
   }
   return pSet;
 }
@@ -197,10 +210,14 @@ TransitionMatrix<T> NetiKAT<T, ns...>::test(size_t fieldIndex,
   for (size_t i = 0; i < matrixDim; ++i) {
     PacketSet packetsIn = packetSetFromIndex(i);
     PacketSet packetsOut;
-    for (size_t iP : packetsIn) {
+    // TODO: only loop over packets that are present
+    for (size_t iP = 0; iP < possiblePackets; ++iP) {
+      if (!packetsIn[iP])
+        continue;
       Packet p = packetFromIndex(iP);
       if (p[fieldIndex] == fieldValue) {
-        packetsOut.insert(packetIndex(p));
+        // packetsOut.insert(packetIndex(p));
+        packetsOut[iP] = true;
       }
     }
     trip.emplace_back(index(packetsOut), i, 1);
@@ -221,7 +238,10 @@ TransitionMatrix<T> NetiKAT<T, ns...>::testSize(size_t fieldIndex,
   for (size_t i = 0; i < matrixDim; ++i) {
     PacketSet packetsIn = packetSetFromIndex(i);
     size_t nPacketsOut = 0;
-    for (size_t iP : packetsIn) {
+    // TODO: don't loop over all packets
+    for (size_t iP = 0; iP < possiblePackets; ++iP) {
+      if (!packetsIn[iP])
+        continue;
       Packet p = packetFromIndex(iP);
       if (p[fieldIndex] == fieldValue) {
         nPacketsOut += 1;
@@ -249,11 +269,22 @@ TransitionMatrix<T> NetiKAT<T, ns...>::set(size_t fieldIndex,
   for (size_t i = 0; i < matrixDim; ++i) {
     PacketSet packetsIn = packetSetFromIndex(i);
     PacketSet packetsOut;
+    // TODO: don't loop over all packets
+    for (size_t iP = 0; iP < possiblePackets; ++iP) {
+      if (!packetsIn[iP])
+        continue;
+      Packet p = packetFromIndex(iP);
+      p[fieldIndex] = fieldValue;
+      packetsOut[packetIndex(p)] = true;
+    }
+
+    /*
     for (size_t iP : packetsIn) {
       Packet p = packetFromIndex(iP);
       p[fieldIndex] = fieldValue;
       packetsOut.insert(packetIndex(p));
     }
+    */
     trip.emplace_back(index(packetsOut), i, 1);
   }
 
@@ -265,8 +296,9 @@ template <typename T, size_t... ns>
 size_t NetiKAT<T, ns...>::packetSetUnion(size_t a, size_t b) const {
   PacketSet p = packetSetFromIndex(a);
   PacketSet q = packetSetFromIndex(b);
-  p.insert(std::begin(q), std::end(q));
-  return index(p);
+  // p.insert(std::begin(q), std::end(q));
+  // return index(p);
+  return index(p | q);
 }
 
 // B[p & q]

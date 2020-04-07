@@ -38,8 +38,8 @@ public:
   size_t maxNumPackets;
 
   // The indices of the packets contained in this set
-  // using PacketSet = std::bitset<TemplateProduct<ns...>::value>;
-  using PacketSet = std::set<size_t>;
+  using PacketSet = std::bitset<TemplateProduct<ns...>::value>;
+  // using PacketSet = std::set<size_t>;
 
   // numNetiKATsOfSizeLessThan[i] is the number of packet sets of size less
   // than i
