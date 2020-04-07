@@ -3,9 +3,6 @@
 #include <stdlib.h> /* rand, malloc */
 #include <sys/mman.h>
 
-std::vector<size_t> packetType{2, 2, 2, 2};
-NetiKAT set = NetiKAT(packetType);
-
 // Generate a random floating point number between fMin and fMax
 double fRand(double fMin, double fMax) {
   double f = (double)rand() / (RAND_MAX + 1.0);
@@ -166,7 +163,7 @@ void starParameterSweep() {
        << endl;
 
   for (size_t n = 1; n < 64; n *= 2) {
-    NetiKAT set = NetiKAT(std::vector<size_t>{n});
+    NetiKAT set = NetiKAT(std::vector<size_t>{n}, 3);
     for (size_t entries = 2; entries < std::min(set.matrixDim, (size_t)16);
          entries *= 2) {
       TransitionMatrix p = randomStochastic(set.matrixDim, entries);
@@ -181,110 +178,21 @@ void starParameterSweep() {
   }
 }
 
-bool testAlloc(size_t n) {
-  char *array = (char *)malloc(n * sizeof(char));
-  if (array == NULL)
-    return false;
-
-  for (size_t i = 0; i < n; ++i) {
-    array[i] = 12;
-  }
-
-  free(array);
-  return true;
-}
-
-bool testMMapAlloc(size_t n) {
-  size_t bufferSize = n * sizeof(char);
-  void *addr = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (addr == MAP_FAILED)
-    return false;
-
-  char *array = (char *)addr;
-
-  for (size_t i = 0; i < n; ++i) {
-    array[i] = 12;
-  }
-
-  munmap(addr, bufferSize);
-  return true;
-}
-
-bool testTripletVectorAlloc(size_t n) {
-  std::vector<Eigen::Triplet<double>> T;
-  T.reserve(n);
-  for (size_t iT = 0; iT < n; ++iT) {
-    T.emplace_back(0, 0, 1);
-  }
-  return true;
-}
-
-bool testSneakyTripletAlloc(size_t n) {
-
-  int nBytes = n * (2 * sizeof(int) + sizeof(double));
-
-  char *array = (char *)malloc(nBytes);
-
-  if (array == NULL)
-    return false;
-
-  int *intArray = (int *)array;
-  double *doubleArray = (double *)array;
-
-  for (size_t iT = 0; iT < n; ++iT) {
-    intArray[4 * iT] = iT;          // row
-    intArray[4 * iT + 1] = iT;      // col
-    doubleArray[2 * iT + 1] = 3.14; // value;
-  }
-
-  Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)array;
-  Eigen::SparseMatrix<double> M(n, n);
-  M.setFromTriplets(T, T + n);
-  free(array);
-
-  cout << M.coeffRef(0, 0) << "\t" << M.coeffRef(1, 0);
-
-  return true;
-}
-
-size_t maxMemoryAllocation() {
-
-  cout << 2 * sizeof(int) + sizeof(double) << "\t" << sizeof(char) << endl;
-  size_t maxMem = pow(2, 26);
-  while (testMMapAlloc(maxMem) && maxMem * 2 > maxMem) {
-    cout << "Successfully allocated " << maxMem << " bytes\t" << log2(maxMem)
-         << endl;
-    maxMem *= 2;
-  }
-
-  cout << endl;
-  maxMem = pow(2, 26);
-  // while (testAlloc(maxMem) && maxMem * 2 > maxMem) {
-  // while (testTripletVectorAlloc(maxMem) && maxMem * 2 > maxMem) {
-  while (testSneakyTripletAlloc(maxMem) && maxMem * 2 > maxMem) {
-    cout << "Successfully allocated " << maxMem << " Triplets\t" << log2(maxMem)
-         << endl;
-    maxMem *= 2;
-  }
-
-  return maxMem;
-}
-
 int main() {
-  // benchmark(set);
+
+  std::vector<size_t> packetType{2, 2, 2, 2};
+  NetiKAT set = NetiKAT(packetType, 3);
+  benchmark(set);
   // starParameterSweep();
 
-  // size_t n = 27;
+  // size_t n = 32;
   // size_t entries = 4;
-  // NetiKAT set = NetiKAT(std::vector<size_t>{n});
+  // NetiKAT set = NetiKAT(std::vector<size_t>{n}, 4);
   // cout << "Constructing Matrix" << endl;
   // TransitionMatrix p = randomStochastic(set.matrixDim, entries);
   // size_t iterations;
   // cout << "Computing star" << endl;
   // set.starApprox(p, 1e-8, iterations);
-
-  maxMemoryAllocation();
 
   return 0;
 }

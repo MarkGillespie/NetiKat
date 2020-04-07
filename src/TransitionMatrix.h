@@ -33,7 +33,7 @@ using PacketSet = std::set<Packet>;
 
 class NetiKAT {
 public:
-  NetiKAT(const PacketType &type_, size_t maxNumPackets_ = 4);
+  NetiKAT(const PacketType &type_, size_t maxNumPackets_);
 
   PacketType packetType;
   size_t matrixDim;
