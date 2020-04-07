@@ -28,9 +28,6 @@ using PacketType = std::vector<size_t>;
 // Particular entry in each field
 using Packet = std::vector<size_t>;
 
-// The indices of the packets contained in this set
-using PacketSet = std::set<size_t>;
-
 template <typename T, size_t... ns> class NetiKAT {
 public:
   NetiKAT(size_t maxNumPackets_);
@@ -39,6 +36,10 @@ public:
   size_t matrixDim;
   size_t possiblePackets;
   size_t maxNumPackets;
+
+  // The indices of the packets contained in this set
+  // using PacketSet = std::bitset<TemplateProduct<ns...>::value>;
+  using PacketSet = std::set<size_t>;
 
   // numNetiKATsOfSizeLessThan[i] is the number of packet sets of size less
   // than i
@@ -59,6 +60,9 @@ public:
   size_t index(const PacketSet &packets) const;
   Eigen::VectorXd toVec(const PacketSet &packets) const;
   PacketSet packetSetFromIndex(size_t idx) const;
+
+  template <typename... S>
+  PacketSet packetSetFromPacketIndices(S... indices) const;
 
   size_t bigIndex(size_t i, size_t j) const;
   std::pair<size_t, size_t> bigUnindex(size_t i) const;

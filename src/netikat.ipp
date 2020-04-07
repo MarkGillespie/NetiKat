@@ -125,7 +125,8 @@ Eigen::VectorXd NetiKAT<T, ns...>::toVec(const PacketSet &packets) const {
 }
 
 template <typename T, size_t... ns>
-PacketSet NetiKAT<T, ns...>::packetSetFromIndex(size_t idx) const {
+typename NetiKAT<T, ns...>::PacketSet
+NetiKAT<T, ns...>::packetSetFromIndex(size_t idx) const {
   PacketSet packets;
 
   size_t nPackets = 0;
@@ -154,6 +155,18 @@ PacketSet NetiKAT<T, ns...>::packetSetFromIndex(size_t idx) const {
   }
 
   return packets;
+}
+template <typename T, size_t... ns>
+template <typename... S>
+typename NetiKAT<T, ns...>::PacketSet
+NetiKAT<T, ns...>::packetSetFromPacketIndices(S... indices) const {
+  std::vector<size_t> indexList{indices...};
+  PacketSet pSet;
+  for (size_t idx : indexList) {
+    pSet.insert(idx);
+    // pSet[idx = true];
+  }
+  return pSet;
 }
 
 template <typename T, size_t... ns>
@@ -260,7 +273,6 @@ size_t NetiKAT<T, ns...>::packetSetUnion(size_t a, size_t b) const {
 template <typename T, size_t... ns>
 TransitionMatrix<T> NetiKAT<T, ns...>::amp(TransitionMatrix<T> p,
                                            TransitionMatrix<T> q) const {
-
   // Sort nonzero entries by "a" value
   // Map each a to {(b, val)}
   // (a is col, b is row)
@@ -331,7 +343,6 @@ std::pair<size_t, size_t> NetiKAT<T, ns...>::bigUnindex(size_t i) const {
 // B[p*]
 template <typename T, size_t... ns>
 TransitionMatrix<T> NetiKAT<T, ns...>::star(TransitionMatrix<T> p) const {
-
   Eigen::SparseMatrix<double> S(matrixDim * matrixDim, matrixDim * matrixDim);
   Eigen::SparseMatrix<double> U(matrixDim * matrixDim, matrixDim * matrixDim);
 
