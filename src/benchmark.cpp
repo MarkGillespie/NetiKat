@@ -18,22 +18,6 @@ Eigen::SparseMatrix<double> randomStochastic(size_t n,
   T.reserve(entriesPerCol * n);
   T.emplace_back(0, 0, 1);
 
-  // Eigen::Triplet<double> *T = new Eigen::Triplet<double>[entriesPerCol * n];
-  // cout << "Triplet size: " << sizeof(Eigen::Triplet<double>) << endl;
-  // Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)malloc(
-  //     entriesPerCol * n * sizeof(Eigen::Triplet<double>));
-
-  // void *mem = malloc(pow(2, 64) * sizeof(Eigen::Triplet<double>));
-  // void *mem = malloc(pow(2, 5000) * sizeof(int));
-
-  // if (mem == NULL) {
-  //   cout << "Failed to allocate enough memory" << endl;
-  //   exit(1);
-  // } else {
-  //   cout << "Succeeded in allocating memory" << endl;
-  // }
-  // Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)mem;
-
   std::vector<double> entries(entriesPerCol);
   size_t count = 0;
   Eigen::Triplet<double> trip;
@@ -50,17 +34,83 @@ Eigen::SparseMatrix<double> randomStochastic(size_t n,
     for (size_t i = 0; i < entriesPerCol; ++i) {
       size_t row = rand() % n;
       T.emplace_back(row, col, entries[i] / sum);
-      // trip = Eigen::Triplet<double>(row, col, entries[i] / sum);
-      // T[count++] = trip;
     }
   }
 
   M.setFromTriplets(std::begin(T), std::end(T));
-  // M.setFromTriplets(T, T + entriesPerCol * n);
 
-  // delete[] T;
-  // free(T);
   return M;
+}
+
+// Generate a random stochastic matrix of size nxn with entriesPerCol nonzero
+// entries per column. Default value of entriesPerCol is 24
+Eigen::SparseMatrix<double> randomStochasticLeet(size_t n,
+                                                 size_t entriesPerCol = 24) {
+  Eigen::SparseMatrix<double> M(n, n);
+
+  void *mem = malloc(n * entriesPerCol * (2 * sizeof(int) + sizeof(double)));
+  if (mem == NULL) {
+    cout << "Failed to allocate memory" << endl;
+    exit(1);
+  }
+
+  int *intArr = (int *)mem;
+  double *doubleArr = (double *)mem;
+
+  intArr[0] = 0;
+  intArr[1] = 0;
+  doubleArr[1] = 1;
+
+  double *entries = new double[entriesPerCol];
+  size_t count = 0;
+  Eigen::Triplet<double> trip;
+  for (size_t col = 1; col < n; ++col) {
+    if (fmod(col, pow(2, 24)) == 0) {
+      cout << "col = " << col << " of " << n << " ( "
+           << ((double)col / (double)n) * 100 << "%)" << endl;
+    }
+    double sum = 0;
+    for (size_t i = 0; i < entriesPerCol; ++i) {
+      entries[i] = fRand(0, 1);
+      sum += entries[i];
+    }
+    for (size_t i = 0; i < entriesPerCol; ++i) {
+      size_t row = rand() % n;
+      intArr[4 * count] = row;
+      intArr[4 * count + 1] = col;
+      doubleArr[2 * count + 1] = entries[i] / sum;
+      count++;
+    }
+  }
+  delete[] entries;
+
+  Eigen::Triplet<double> *T = (Eigen::Triplet<double> *)mem;
+  M.setFromTriplets(T, T + entriesPerCol * n);
+  free(mem);
+
+  return M;
+}
+
+void benchmarkMatrixGeneration(size_t n) {
+  TransitionMatrix p;
+  std::clock_t start;
+  double duration;
+
+  cout << "Generating Random Matrix with array" << endl;
+  start = std::clock();
+  p = randomStochasticLeet(n);
+  duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+  cout << "generation took " << duration << "s on matrices of size " << n
+       << endl
+       << endl;
+
+  cout << "Generating Random Matrix with vector" << endl;
+  start = std::clock();
+  p = randomStochastic(n);
+  duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+  cout << "generation took " << duration << "s on matrices of size " << n
+       << endl
+       << endl;
 }
 
 void benchmark(const NetiKAT &set) {
@@ -71,8 +121,8 @@ void benchmark(const NetiKAT &set) {
   cout << "Generating Random Matrices . . ." << endl;
 
   // TODO: sample sparse stochastic matrices
-  p = randomStochastic(set.matrixDim);
-  q = randomStochastic(set.matrixDim);
+  p = randomStochasticLeet(set.matrixDim);
+  q = randomStochasticLeet(set.matrixDim);
 
   cout << "Beginning Test" << endl;
 
@@ -142,19 +192,20 @@ void benchmark(const NetiKAT &set) {
 
   // starApprox
   start = std::clock();
-  M = set.starApprox(p, 1e-12);
+  M = set.starApprox(p, 1e-8);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "StarApprox(1e-12) took " << duration << "s on matrices of size "
        << set.matrixDim << endl
        << endl;
 
-  // star
-  start = std::clock();
-  M = set.star(p);
-  duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Star took " << duration << "s on matrices of size " << set.matrixDim
-       << endl
-       << endl;
+  // // star
+  // start = std::clock();
+  // M = set.star(p);
+  // duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
+  // cout << "Star took " << duration << "s on matrices of size " <<
+  // set.matrixDim
+  //      << endl
+  //      << endl;
 }
 
 void starParameterSweep() {
@@ -180,9 +231,10 @@ void starParameterSweep() {
 
 int main() {
 
-  std::vector<size_t> packetType{2, 2, 2, 2};
-  NetiKAT set = NetiKAT(packetType, 3);
-  benchmark(set);
+  std::vector<size_t> packetType{64};
+  NetiKAT neti = NetiKAT(packetType, 4);
+  cout << "Matrix size: " << neti.matrixDim << endl;
+  benchmark(neti);
   // starParameterSweep();
 
   // size_t n = 32;

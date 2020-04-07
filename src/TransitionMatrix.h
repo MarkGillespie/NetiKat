@@ -29,7 +29,8 @@ using PacketType = std::vector<size_t>;
 // Particular entry in each field
 using Packet = std::vector<size_t>;
 
-using PacketSet = std::set<Packet>;
+// The indices of the packets contained in this set
+using PacketSet = std::set<size_t>;
 
 class NetiKAT {
 public:
@@ -44,6 +45,9 @@ public:
   // than i
   // This is useful when indexing packet sets
   std::vector<size_t> numNetiKATsOfSizeLessThan;
+
+  std::vector<size_t> binomialCoefficients;
+  size_t binomialCoefficient(size_t n, size_t k) const;
 
   size_t packetIndex(const Packet &p) const;
   Packet packetFromIndex(size_t idx) const;

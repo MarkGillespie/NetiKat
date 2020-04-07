@@ -16,9 +16,19 @@ protected:
   void SetUp() override {}
 
   static void TearDownTestSuite() { neti.release(); }
+
+  static inline size_t pkt(size_t a);
+  static inline size_t pkt(size_t a, size_t b);
 };
 
 std::unique_ptr<NetiKAT> TransitionMatrixTest::neti = nullptr;
+
+size_t TransitionMatrixTest::pkt(size_t a) {
+  return neti->packetIndex(std::vector<size_t>{a, 0});
+}
+size_t TransitionMatrixTest::pkt(size_t a, size_t b) {
+  return neti->packetIndex(std::vector<size_t>{a, b});
+}
 
 // ============================================
 //        TransitionMatrix Tests
@@ -81,7 +91,8 @@ TEST_F(TransitionMatrixTest, Skip) {
 
 TEST_F(TransitionMatrixTest, Drop) {
   TransitionMatrix dropMat = neti->drop();
-  Eigen::VectorXd v = neti->toVec(PacketSet{std::vector<size_t>{1}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1)});
+
   Eigen::VectorXd droppedVec = dropMat * v;
 
   Eigen::VectorXd trueDroppedVec = neti->toVec(PacketSet());
@@ -91,20 +102,17 @@ TEST_F(TransitionMatrixTest, Drop) {
 
 TEST_F(TransitionMatrixTest, Test) {
   TransitionMatrix testMat = neti->test(0, 1);
-  Eigen::VectorXd v =
-      neti->toVec(PacketSet{std::vector<size_t>{0}, std::vector<size_t>{1}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(0), pkt(1)});
   Eigen::VectorXd testedVec = testMat * v;
 
-  Eigen::VectorXd trueTestedVec =
-      neti->toVec(PacketSet{std::vector<size_t>{1}});
+  Eigen::VectorXd trueTestedVec = neti->toVec(PacketSet{pkt(1)});
 
   EXPECT_MAT_EQ(testedVec, trueTestedVec);
 }
 
 TEST_F(TransitionMatrixTest, TestSize) {
   TransitionMatrix testMat = neti->testSize(0, 1, 2);
-  Eigen::VectorXd v =
-      neti->toVec(PacketSet{std::vector<size_t>{1, 1}, std::vector<size_t>{1}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1, 1), pkt(1, 0)});
   Eigen::VectorXd testedVec = testMat * v;
 
   EXPECT_MAT_EQ(testedVec, v);
@@ -112,10 +120,10 @@ TEST_F(TransitionMatrixTest, TestSize) {
 
 TEST_F(TransitionMatrixTest, Set) {
   TransitionMatrix setMat = neti->set(0, 1);
-  Eigen::VectorXd v = neti->toVec(PacketSet{std::vector<size_t>{0}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(0)});
   Eigen::VectorXd setVec = setMat * v;
 
-  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{std::vector<size_t>{1}});
+  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{pkt(1)});
 
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
@@ -124,11 +132,10 @@ TEST_F(TransitionMatrixTest, Amp) {
   TransitionMatrix setZeroMat = neti->set(0, 0);
   TransitionMatrix setOneMat = neti->set(0, 1);
   TransitionMatrix setBothMat = neti->amp(setZeroMat, setOneMat);
-  Eigen::VectorXd v = neti->toVec(PacketSet{std::vector<size_t>{0}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(0)});
   Eigen::VectorXd setVec = setBothMat * v;
 
-  Eigen::VectorXd trueSetVec =
-      neti->toVec(PacketSet{std::vector<size_t>{0}, std::vector<size_t>{1}});
+  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{pkt(0), pkt(1)});
 
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
@@ -156,15 +163,14 @@ TEST_F(TransitionMatrixTest, Seq) {
   TransitionMatrix setZeroMat = neti->set(0, 0);
   TransitionMatrix setOneMat = neti->set(0, 1);
   TransitionMatrix setZeroThenOneMat = neti->seq(setOneMat, setZeroMat);
-  Eigen::VectorXd v = neti->toVec(PacketSet{std::vector<size_t>{1}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1)});
 
   Eigen::VectorXd setZeroVec = setZeroMat * v;
-  Eigen::VectorXd trueSetZeroVec =
-      neti->toVec(PacketSet{std::vector<size_t>{0}});
+  Eigen::VectorXd trueSetZeroVec = neti->toVec(PacketSet{pkt(0)});
   EXPECT_MAT_EQ(setZeroVec, trueSetZeroVec);
 
   Eigen::VectorXd setVec = setZeroThenOneMat * v;
-  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{std::vector<size_t>{1}});
+  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{pkt(1)});
 
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
@@ -184,9 +190,9 @@ TEST_F(TransitionMatrixTest, Choice) {
   TransitionMatrix setOneMat = neti->set(0, 1);
   double p = 0.25;
   TransitionMatrix probMat = neti->choice(p, setZeroMat, setOneMat);
-  Eigen::VectorXd v = neti->toVec(PacketSet{std::vector<size_t>{1}});
-  Eigen::VectorXd v0 = neti->toVec(PacketSet{std::vector<size_t>{0}});
-  Eigen::VectorXd v1 = neti->toVec(PacketSet{std::vector<size_t>{1}});
+  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1)});
+  Eigen::VectorXd v0 = neti->toVec(PacketSet{pkt(0)});
+  Eigen::VectorXd v1 = neti->toVec(PacketSet{pkt(1)});
 
   Eigen::VectorXd chosenVec = probMat * v;
   Eigen::VectorXd trueChosenVec = p * v0 + (1 - p) * v1;
