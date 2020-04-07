@@ -4,7 +4,7 @@
 #include <sys/mman.h>
 
 std::vector<size_t> packetType{2, 2, 2, 2};
-PacketSet set = PacketSet(packetType);
+NetiKAT set = NetiKAT(packetType);
 
 // Generate a random floating point number between fMin and fMax
 double fRand(double fMin, double fMax) {
@@ -66,7 +66,7 @@ Eigen::SparseMatrix<double> randomStochastic(size_t n,
   return M;
 }
 
-void benchmark(const PacketSet &set) {
+void benchmark(const NetiKAT &set) {
   TransitionMatrix M, p, q;
   std::clock_t start;
   double duration;
@@ -166,7 +166,7 @@ void starParameterSweep() {
        << endl;
 
   for (size_t n = 1; n < 64; n *= 2) {
-    PacketSet set = PacketSet(std::vector<size_t>{n});
+    NetiKAT set = NetiKAT(std::vector<size_t>{n});
     for (size_t entries = 2; entries < std::min(set.matrixDim, (size_t)16);
          entries *= 2) {
       TransitionMatrix p = randomStochastic(set.matrixDim, entries);
@@ -277,7 +277,7 @@ int main() {
 
   // size_t n = 27;
   // size_t entries = 4;
-  // PacketSet set = PacketSet(std::vector<size_t>{n});
+  // NetiKAT set = NetiKAT(std::vector<size_t>{n});
   // cout << "Constructing Matrix" << endl;
   // TransitionMatrix p = randomStochastic(set.matrixDim, entries);
   // size_t iterations;

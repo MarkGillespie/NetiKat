@@ -1,26 +1,26 @@
 #include "TransitionMatrix.h"
 
-PacketSet::PacketSet(const PacketType &type_, size_t maxNumPackets_)
+NetiKAT::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
     : packetType(type_), maxNumPackets(maxNumPackets_) {
   possiblePackets = 1;
   for (size_t fieldSize : packetType) {
     possiblePackets *= fieldSize;
   }
 
-  numPacketSetsOfSizeLessThan.reserve(maxNumPackets + 1);
-  numPacketSetsOfSizeLessThan.push_back(0);
+  numNetiKATsOfSizeLessThan.reserve(maxNumPackets + 1);
+  numNetiKATsOfSizeLessThan.push_back(0);
   for (size_t i = 1; i <= maxNumPackets; ++i) {
     // The number of packet sets of size less than i is the number of packet
     // sets of size less than i-1 plus the number of packet sets of size exactly
     // i-1
-    numPacketSetsOfSizeLessThan.push_back(numPacketSetsOfSizeLessThan[i - 1] +
-                                          binom(possiblePackets, i - 1));
+    numNetiKATsOfSizeLessThan.push_back(numNetiKATsOfSizeLessThan[i - 1] +
+                                        binom(possiblePackets, i - 1));
   }
-  matrixDim = numPacketSetsOfSizeLessThan[maxNumPackets] +
+  matrixDim = numNetiKATsOfSizeLessThan[maxNumPackets] +
               binom(possiblePackets, maxNumPackets);
 }
 
-size_t PacketSet::packetIndex(const Packet &p) const {
+size_t NetiKAT::packetIndex(const Packet &p) const {
   size_t idx = 0;
 
   size_t offset = 1;
@@ -32,7 +32,7 @@ size_t PacketSet::packetIndex(const Packet &p) const {
   return idx;
 }
 
-Packet PacketSet::packetFromIndex(size_t idx) const {
+Packet NetiKAT::packetFromIndex(size_t idx) const {
   Packet p;
 
   for (size_t iF = 0; iF < packetType.size(); ++iF) {
@@ -44,94 +44,85 @@ Packet PacketSet::packetFromIndex(size_t idx) const {
   return p;
 }
 
-size_t PacketSet::index(const std::set<Packet> &packets) const {
-  size_t idx = 0;
-  for (const Packet &p : packets) {
-    idx |= 1 << packetIndex(p);
+// The indexing scheme for packet sets is as follows:
+// First of all, packet sets are ordered by cardinality. Within each collection
+// of packet sets with the same cardinality, the packet sets are ordered
+// lexicographically
+// Packet sets which are too big index to 0
+size_t NetiKAT::index(const PacketSet &packets) const {
+
+  if (packets.size() > maxNumPackets) {
+    return 0;
   }
-  return compressIndex(idx, packets.size());
-  // return idx// ;
+
+  std::vector<size_t> presentIndices;
+  presentIndices.reserve(packets.size());
+  for (const Packet &p : packets) {
+    presentIndices.push_back(packetIndex(p));
+  }
+  std::sort(std::begin(presentIndices), std::end(presentIndices));
+
+  // Index of packet set among sets of same size
+  size_t peerIndex = 0;
+
+  // I need to ensure that prevIdx + 1 = 0 the first time I use prevIdx, so I
+  // set prevIdx to -1. Since prevIdx is a size_t this underflows. But that
+  // doesn't matter since -1 is still the additive inverse of 1 even when
+  // working with unsigned ints
+  size_t prevIdx = -1;
+  for (size_t iIdx = 0; iIdx < packets.size(); ++iIdx) {
+    size_t packetIdx = presentIndices[iIdx];
+    for (size_t iSkip = prevIdx + 1; iSkip < packetIdx; ++iSkip) {
+      // If there's a zero in position iSkip, you're behind all of the packets
+      // that have a 1 there instead, and thus have (packets.size() - iIdx) ones
+      // in the last few positions
+      peerIndex +=
+          binom(possiblePackets - iSkip - 1, packets.size() - iIdx - 1);
+    }
+    prevIdx = packetIdx;
+  }
+
+  return peerIndex + numNetiKATsOfSizeLessThan[packets.size()];
 }
 
-Eigen::VectorXd PacketSet::toVec(const std::set<Packet> &packets) const {
+Eigen::VectorXd NetiKAT::toVec(const PacketSet &packets) const {
   size_t pIdx = index(packets);
   Eigen::VectorXd v = Eigen::VectorXd::Zero(matrixDim);
   v(pIdx) = 1;
   return v;
 }
 
-std::set<Packet> PacketSet::packetSetFromIndex(size_t idx) const {
-  std::set<Packet> packets;
-  size_t decompressedIndex = decompressIndex(idx);
-  // size_t decompressedIndex = idx;
+PacketSet NetiKAT::packetSetFromIndex(size_t idx) const {
+  PacketSet packets;
 
-  // TODO: this creates a lot of extra work. Just loop over possible packet sets
-  for (size_t iP = 0; iP < possiblePackets; ++iP) {
-    if ((decompressedIndex & 1) == 1) {
-      packets.insert(packetFromIndex(iP));
-    }
-    decompressedIndex = decompressedIndex >> 1;
-  }
-
-  return packets;
-}
-
-// Takes an index of a packet set using the naive scheme (i.e. an n-bit
-// integer) and compresses it into an index into the collection of packets of
-// size at most maxNumPackets
-// idx is the uncompressed index and k is the number of packets in the set
-size_t PacketSet::compressIndex(size_t idx, size_t k) const {
-  if (k > maxNumPackets) {
-    return 0;
-  }
-
-  // Index of packet set among sets of size k
-  size_t peerIndex = 0;
-
-  size_t onesSoFar = 0;
-  for (size_t iP = 0; iP < possiblePackets && onesSoFar != k; ++iP) {
-    if ((idx & 1) == 1) {
-      onesSoFar++;
-    } else {
-      // idx is the uncompressed index
-      // If there's a zero in position iP, you're behind all of the packets that
-      // have a 1 there instead
-      peerIndex += binom(possiblePackets - iP - 1, k - onesSoFar - 1);
-    }
-    idx = idx >> 1;
-  }
-
-  return peerIndex + numPacketSetsOfSizeLessThan[k];
-}
-
-size_t PacketSet::decompressIndex(size_t idx) const {
   size_t nPackets = 0;
   while (nPackets + 1 <= maxNumPackets &&
-         numPacketSetsOfSizeLessThan[nPackets + 1] <= idx) {
+         numNetiKATsOfSizeLessThan[nPackets + 1] <= idx) {
     nPackets++;
   }
+
   size_t nPeers = binom(possiblePackets, nPackets);
 
-  size_t peerIndex = idx - numPacketSetsOfSizeLessThan[nPackets];
+  size_t peerIndex = idx - numNetiKATsOfSizeLessThan[nPackets];
   size_t reconstructedIndex = 0;
   size_t packetsLeft = nPackets;
   for (size_t iP = 0; iP < possiblePackets - packetsLeft && packetsLeft != 0;
        ++iP) {
     size_t nextTerm = binom(possiblePackets - iP - 1, packetsLeft);
     if (peerIndex < nPeers - nextTerm) {
-      reconstructedIndex |= 1 << iP;
+      packets.insert(packetFromIndex(iP));
       packetsLeft -= 1;
       nPeers -= nextTerm;
     }
   }
   for (size_t iP = possiblePackets - packetsLeft; iP < possiblePackets; ++iP) {
-    reconstructedIndex |= 1 << iP;
+    packets.insert(packetFromIndex(iP));
   }
 
-  return reconstructedIndex;
+  return packets;
 }
 
-TransitionMatrix PacketSet::drop() const {
+TransitionMatrix NetiKAT::drop() const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
@@ -143,16 +134,16 @@ TransitionMatrix PacketSet::drop() const {
   return M;
 }
 
-TransitionMatrix PacketSet::skip() const { return speye(matrixDim); }
+TransitionMatrix NetiKAT::skip() const { return speye(matrixDim); }
 
 // B[fieldIndex = fieldValue]
-TransitionMatrix PacketSet::test(size_t fieldIndex, size_t fieldValue) const {
+TransitionMatrix NetiKAT::test(size_t fieldIndex, size_t fieldValue) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
   for (size_t i = 0; i < matrixDim; ++i) {
-    std::set<Packet> packetsIn = packetSetFromIndex(i);
-    std::set<Packet> packetsOut;
+    PacketSet packetsIn = packetSetFromIndex(i);
+    PacketSet packetsOut;
     for (const Packet &p : packetsIn) {
       if (p[fieldIndex] == fieldValue) {
         packetsOut.insert(p);
@@ -166,13 +157,13 @@ TransitionMatrix PacketSet::test(size_t fieldIndex, size_t fieldValue) const {
 }
 
 // B[#fieldIndex = fieldValue : n]
-TransitionMatrix PacketSet::testSize(size_t fieldIndex, size_t fieldValue,
-                                     size_t n) const {
+TransitionMatrix NetiKAT::testSize(size_t fieldIndex, size_t fieldValue,
+                                   size_t n) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
   for (size_t i = 0; i < matrixDim; ++i) {
-    std::set<Packet> packetsIn = packetSetFromIndex(i);
+    PacketSet packetsIn = packetSetFromIndex(i);
     size_t nPacketsOut = 0;
     for (const Packet &p : packetsIn) {
       if (p[fieldIndex] == fieldValue) {
@@ -192,13 +183,13 @@ TransitionMatrix PacketSet::testSize(size_t fieldIndex, size_t fieldValue,
 }
 
 // B[fieldIndex <- fieldValue]
-TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) const {
+TransitionMatrix NetiKAT::set(size_t fieldIndex, size_t fieldValue) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> T;
 
   for (size_t i = 0; i < matrixDim; ++i) {
-    std::set<Packet> packetsIn = packetSetFromIndex(i);
-    std::set<Packet> packetsOut;
+    PacketSet packetsIn = packetSetFromIndex(i);
+    PacketSet packetsOut;
     for (Packet p : packetsIn) {
       p[fieldIndex] = fieldValue;
       packetsOut.insert(p);
@@ -210,15 +201,15 @@ TransitionMatrix PacketSet::set(size_t fieldIndex, size_t fieldValue) const {
   return M;
 }
 
-size_t PacketSet::packetSetUnion(size_t a, size_t b) const {
-  std::set<Packet> p = packetSetFromIndex(a);
-  std::set<Packet> q = packetSetFromIndex(b);
+size_t NetiKAT::packetSetUnion(size_t a, size_t b) const {
+  PacketSet p = packetSetFromIndex(a);
+  PacketSet q = packetSetFromIndex(b);
   p.insert(std::begin(q), std::end(q));
   return index(p);
 }
 
 // B[p & q]
-TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) const {
+TransitionMatrix NetiKAT::amp(TransitionMatrix p, TransitionMatrix q) const {
 
   // Sort nonzero entries by "a" value
   // Map each a to {(b, val)}
@@ -262,28 +253,26 @@ TransitionMatrix PacketSet::amp(TransitionMatrix p, TransitionMatrix q) const {
 }
 
 // B[p;q]
-TransitionMatrix PacketSet::seq(TransitionMatrix p, TransitionMatrix q) const {
+TransitionMatrix NetiKAT::seq(TransitionMatrix p, TransitionMatrix q) const {
   return p * q;
 }
 
 // B[p \oplus_r q]
-TransitionMatrix PacketSet::choice(double r, TransitionMatrix p,
-                                   TransitionMatrix q) const {
+TransitionMatrix NetiKAT::choice(double r, TransitionMatrix p,
+                                 TransitionMatrix q) const {
   return r * p + (1 - r) * q;
 }
 
-size_t PacketSet::bigIndex(size_t i, size_t j) const {
-  return i + matrixDim * j;
-}
+size_t NetiKAT::bigIndex(size_t i, size_t j) const { return i + matrixDim * j; }
 
-std::pair<size_t, size_t> PacketSet::bigUnindex(size_t i) const {
+std::pair<size_t, size_t> NetiKAT::bigUnindex(size_t i) const {
   return std::make_pair(i % matrixDim, floor(i / matrixDim));
 }
 
 // TODO: clean up, write more tests
 // TODO: normalize columns after pruning small values?
 // B[p*]
-TransitionMatrix PacketSet::star(TransitionMatrix p) const {
+TransitionMatrix NetiKAT::star(TransitionMatrix p) const {
 
   Eigen::SparseMatrix<double> S(matrixDim * matrixDim, matrixDim * matrixDim);
   Eigen::SparseMatrix<double> U(matrixDim * matrixDim, matrixDim * matrixDim);
@@ -420,14 +409,14 @@ TransitionMatrix PacketSet::star(TransitionMatrix p) const {
 }
 
 // B[p*]
-TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol) const {
+TransitionMatrix NetiKAT::starApprox(TransitionMatrix p, double tol) const {
   size_t temp;
   return starApprox(p, tol, temp);
 }
 
 // B[p*]
-TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol,
-                                       size_t &iterationsNeeded) const {
+TransitionMatrix NetiKAT::starApprox(TransitionMatrix p, double tol,
+                                     size_t &iterationsNeeded) const {
   TransitionMatrix oldS = skip();
   TransitionMatrix s = amp(skip(), seq(oldS, p));
   iterationsNeeded = 1;
@@ -443,8 +432,8 @@ TransitionMatrix PacketSet::starApprox(TransitionMatrix p, double tol,
 }
 
 // B[p*]
-TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p,
-                                           size_t iter) const {
+TransitionMatrix NetiKAT::dumbStarApprox(TransitionMatrix p,
+                                         size_t iter) const {
   TransitionMatrix s = skip();
 
   for (size_t i = 0; i < iter; ++i) {
@@ -455,7 +444,7 @@ TransitionMatrix PacketSet::dumbStarApprox(TransitionMatrix p,
   return s;
 }
 
-void PacketSet::normalize(TransitionMatrix &M) const {
+void NetiKAT::normalize(TransitionMatrix &M) const {
   Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
   Eigen::VectorXd colSums = ones.transpose() * M;
   for (int k = 0; k < M.outerSize(); ++k) {

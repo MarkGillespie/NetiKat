@@ -19,6 +19,8 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
+struct lex_compare {};
+
 using TransitionMatrix = Eigen::SparseMatrix<double>;
 
 // Number of possible values for each field
@@ -27,33 +29,33 @@ using PacketType = std::vector<size_t>;
 // Particular entry in each field
 using Packet = std::vector<size_t>;
 
-class PacketSet {
+using PacketSet = std::set<Packet>;
+
+class NetiKAT {
 public:
-  PacketSet(const PacketType &type_, size_t maxNumPackets_ = 4);
+  NetiKAT(const PacketType &type_, size_t maxNumPackets_ = 4);
 
   PacketType packetType;
   size_t matrixDim;
   size_t possiblePackets;
   size_t maxNumPackets;
 
-  // numPacketSetsOfSizeLessThan[i] is the number of packet sets of size less
+  // numNetiKATsOfSizeLessThan[i] is the number of packet sets of size less
   // than i
   // This is useful when indexing packet sets
-  std::vector<size_t> numPacketSetsOfSizeLessThan;
+  std::vector<size_t> numNetiKATsOfSizeLessThan;
 
   size_t packetIndex(const Packet &p) const;
   Packet packetFromIndex(size_t idx) const;
 
-  size_t index(const std::set<Packet> &packets) const;
-  Eigen::VectorXd toVec(const std::set<Packet> &packets) const;
-  std::set<Packet> packetSetFromIndex(size_t idx) const;
-
-  // Takes an index of a packet set using the naive scheme (i.e. an n-bit
-  // integer) and compresses it into an index into the collection of packets of
-  // size at most maxNumPackets
-  // idx is the uncompressed index and k is the number of packets in the set
-  size_t compressIndex(size_t idx, size_t k) const;
-  size_t decompressIndex(size_t idx) const;
+  // The indexing scheme for packet sets is as follows:
+  // First of all, packet sets are ordered by cardinality. Within each
+  // collection of packet sets with the same cardinality, the packet sets are
+  // ordered lexicographically
+  // Packet sets which are too big get index 0
+  size_t index(const PacketSet &packets) const;
+  Eigen::VectorXd toVec(const PacketSet &packets) const;
+  PacketSet packetSetFromIndex(size_t idx) const;
 
   size_t bigIndex(size_t i, size_t j) const;
   std::pair<size_t, size_t> bigUnindex(size_t i) const;
