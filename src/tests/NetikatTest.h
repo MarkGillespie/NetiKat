@@ -5,12 +5,12 @@
 
 class NetikatTest : public testing::Test {
 public:
-  static std::unique_ptr<NetiKAT<double>> neti;
+  static std::unique_ptr<NetiKAT<double, 2, 2>> neti;
 
 protected:
   static void SetUpTestSuite() {
     std::vector<size_t> packetType{2, 2};
-    neti = std::unique_ptr<NetiKAT<double>>(new NetiKAT<double>(packetType, 4));
+    neti = std::unique_ptr<NetiKAT<double, 2, 2>>(new NetiKAT<double, 2, 2>(4));
   }
 
   void SetUp() override {}
@@ -21,7 +21,7 @@ protected:
   static inline size_t pkt(size_t a, size_t b);
 };
 
-std::unique_ptr<NetiKAT<double>> NetikatTest::neti = nullptr;
+std::unique_ptr<NetiKAT<double, 2, 2>> NetikatTest::neti = nullptr;
 
 size_t NetikatTest::pkt(size_t a) {
   return neti->packetIndex(std::vector<size_t>{a, 0});
@@ -42,7 +42,7 @@ TEST_F(NetikatTest, binomialCoefficients) {
 }
 
 TEST_F(NetikatTest, cachedBinomialCoefficients) {
-  NetiKAT<double> net(std::vector<size_t>{57}, 1);
+  NetiKAT<double, 57> net(1);
   size_t nCk = net.binomialCoefficient(56, 12);
   size_t answer = 558383307300; // Solution computed in Mathematica
 

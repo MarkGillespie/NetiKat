@@ -1,12 +1,12 @@
 // Generate a random floating point number between fMin and fMax
-template <typename T> T fRand(T fMin, T fMax) {
+template <typename T, size_t... ns> T fRand(T fMin, T fMax) {
   T f = (T)rand() / (RAND_MAX + 1.0);
   return fMin + f * (fMax - fMin);
 }
 
 // Generate a random stochastic matrix of size nxn with entriesPerCol nonzero
 // entries per column. Default value of entriesPerCol is 24
-template <typename T>
+template <typename T, size_t... ns>
 Eigen::SparseMatrix<T> randomStochastic(size_t n, size_t entriesPerCol) {
   Eigen::SparseMatrix<T> M(n, n);
   std::vector<Eigen::Triplet<double>> trip;
@@ -36,7 +36,8 @@ Eigen::SparseMatrix<T> randomStochastic(size_t n, size_t entriesPerCol) {
   return M;
 }
 
-template <typename T> void benchmark(const NetiKAT<T> &neti, bool runFullStar) {
+template <typename T, size_t... ns>
+void benchmark(const NetiKAT<T, ns...> &neti, bool runFullStar) {
   TransitionMatrix<T> M, p, q;
   std::clock_t start;
   double duration;
@@ -132,13 +133,13 @@ template <typename T> void benchmark(const NetiKAT<T> &neti, bool runFullStar) {
   }
 }
 
-template <typename T> void starParameterSweep() {
+template <typename T, size_t... ns> void starParameterSweep() {
   cout << "Packet Size \t Matrix Size \t Entries per Column \t Time "
           "(s)\tIterations"
        << endl;
 
   for (size_t n = 1; n < 64; n *= 2) {
-    NetiKAT<T> neti = NetiKAT<T>(std::vector<size_t>{n}, 3);
+    NetiKAT<T, ns...> neti = NetiKAT<T, ns...>(std::vector<size_t>{n}, 3);
     for (size_t entries = 2; entries < std::min(neti.matrixDim, (size_t)16);
          entries *= 2) {
       TransitionMatrix<T> p = randomStochastic(neti.matrixDim, entries);

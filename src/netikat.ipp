@@ -1,10 +1,9 @@
-template <typename T>
-NetiKAT<T>::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
-    : packetType(type_), maxNumPackets(maxNumPackets_) {
-  possiblePackets = 1;
-  for (size_t fieldSize : packetType) {
-    possiblePackets *= fieldSize;
-  }
+template <typename T, size_t... ns>
+NetiKAT<T, ns...>::NetiKAT(size_t maxNumPackets_)
+    : maxNumPackets(maxNumPackets_) {
+  packetType = TemplateToVec::parse<ns...>();
+
+  possiblePackets = TemplateProduct<ns...>::value;
 
   numNetiKATsOfSizeLessThan.reserve(maxNumPackets + 1);
   numNetiKATsOfSizeLessThan.push_back(0);
@@ -31,8 +30,8 @@ NetiKAT<T>::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
   }
 }
 
-template <typename T>
-size_t NetiKAT<T>::binomialCoefficient(size_t n, size_t k) const {
+template <typename T, size_t... ns>
+size_t NetiKAT<T, ns...>::binomialCoefficient(size_t n, size_t k) const {
   if (k > n) {
     throw std::invalid_argument(
         "In binom(n, k), k must be less than or equal to n. But k is " +
@@ -48,7 +47,8 @@ size_t NetiKAT<T>::binomialCoefficient(size_t n, size_t k) const {
   }
 }
 
-template <typename T> size_t NetiKAT<T>::packetIndex(const Packet &p) const {
+template <typename T, size_t... ns>
+size_t NetiKAT<T, ns...>::packetIndex(const Packet &p) const {
   size_t idx = 0;
 
   size_t offset = 1;
@@ -60,7 +60,8 @@ template <typename T> size_t NetiKAT<T>::packetIndex(const Packet &p) const {
   return idx;
 }
 
-template <typename T> Packet NetiKAT<T>::packetFromIndex(size_t idx) const {
+template <typename T, size_t... ns>
+Packet NetiKAT<T, ns...>::packetFromIndex(size_t idx) const {
   Packet p;
 
   for (size_t iF = 0; iF < packetType.size(); ++iF) {
@@ -77,7 +78,8 @@ template <typename T> Packet NetiKAT<T>::packetFromIndex(size_t idx) const {
 // of packet sets with the same cardinality, the packet sets are ordered
 // lexicographically
 // Packet sets which are too big index to 0
-template <typename T> size_t NetiKAT<T>::index(const PacketSet &packets) const {
+template <typename T, size_t... ns>
+size_t NetiKAT<T, ns...>::index(const PacketSet &packets) const {
 
   if (packets.size() > maxNumPackets) {
     return 0;
@@ -114,16 +116,16 @@ template <typename T> size_t NetiKAT<T>::index(const PacketSet &packets) const {
   return peerIndex + numNetiKATsOfSizeLessThan[packets.size()];
 }
 
-template <typename T>
-Eigen::VectorXd NetiKAT<T>::toVec(const PacketSet &packets) const {
+template <typename T, size_t... ns>
+Eigen::VectorXd NetiKAT<T, ns...>::toVec(const PacketSet &packets) const {
   size_t pIdx = index(packets);
   Eigen::VectorXd v = Eigen::VectorXd::Zero(matrixDim);
   v(pIdx) = 1;
   return v;
 }
 
-template <typename T>
-PacketSet NetiKAT<T>::packetSetFromIndex(size_t idx) const {
+template <typename T, size_t... ns>
+PacketSet NetiKAT<T, ns...>::packetSetFromIndex(size_t idx) const {
   PacketSet packets;
 
   size_t nPackets = 0;
@@ -154,7 +156,8 @@ PacketSet NetiKAT<T>::packetSetFromIndex(size_t idx) const {
   return packets;
 }
 
-template <typename T> TransitionMatrix<T> NetiKAT<T>::drop() const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::drop() const {
   Eigen::SparseMatrix<T> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<T>> trip;
 
@@ -166,14 +169,15 @@ template <typename T> TransitionMatrix<T> NetiKAT<T>::drop() const {
   return M;
 }
 
-template <typename T> TransitionMatrix<T> NetiKAT<T>::skip() const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::skip() const {
   return speye(matrixDim);
 }
 
 // B[fieldIndex = fieldValue]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::test(size_t fieldIndex,
-                                     size_t fieldValue) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::test(size_t fieldIndex,
+                                            size_t fieldValue) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> trip;
 
@@ -194,9 +198,10 @@ TransitionMatrix<T> NetiKAT<T>::test(size_t fieldIndex,
 }
 
 // B[#fieldIndex = fieldValue : n]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::testSize(size_t fieldIndex, size_t fieldValue,
-                                         size_t n) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::testSize(size_t fieldIndex,
+                                                size_t fieldValue,
+                                                size_t n) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> trip;
 
@@ -222,9 +227,9 @@ TransitionMatrix<T> NetiKAT<T>::testSize(size_t fieldIndex, size_t fieldValue,
 }
 
 // B[fieldIndex <- fieldValue]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::set(size_t fieldIndex,
-                                    size_t fieldValue) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::set(size_t fieldIndex,
+                                           size_t fieldValue) const {
   Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
   std::vector<Eigen::Triplet<double>> trip;
 
@@ -243,8 +248,8 @@ TransitionMatrix<T> NetiKAT<T>::set(size_t fieldIndex,
   return M;
 }
 
-template <typename T>
-size_t NetiKAT<T>::packetSetUnion(size_t a, size_t b) const {
+template <typename T, size_t... ns>
+size_t NetiKAT<T, ns...>::packetSetUnion(size_t a, size_t b) const {
   PacketSet p = packetSetFromIndex(a);
   PacketSet q = packetSetFromIndex(b);
   p.insert(std::begin(q), std::end(q));
@@ -252,9 +257,9 @@ size_t NetiKAT<T>::packetSetUnion(size_t a, size_t b) const {
 }
 
 // B[p & q]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::amp(TransitionMatrix<T> p,
-                                    TransitionMatrix<T> q) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::amp(TransitionMatrix<T> p,
+                                           TransitionMatrix<T> q) const {
 
   // Sort nonzero entries by "a" value
   // Map each a to {(b, val)}
@@ -298,33 +303,34 @@ TransitionMatrix<T> NetiKAT<T>::amp(TransitionMatrix<T> p,
 }
 
 // B[p;q]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::seq(TransitionMatrix<T> p,
-                                    TransitionMatrix<T> q) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::seq(TransitionMatrix<T> p,
+                                           TransitionMatrix<T> q) const {
   return p * q;
 }
 
 // B[p \oplus_r q]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::choice(T r, TransitionMatrix<T> p,
-                                       TransitionMatrix<T> q) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::choice(T r, TransitionMatrix<T> p,
+                                              TransitionMatrix<T> q) const {
   return r * p + (1 - r) * q;
 }
 
-template <typename T> size_t NetiKAT<T>::bigIndex(size_t i, size_t j) const {
+template <typename T, size_t... ns>
+size_t NetiKAT<T, ns...>::bigIndex(size_t i, size_t j) const {
   return i + matrixDim * j;
 }
 
-template <typename T>
-std::pair<size_t, size_t> NetiKAT<T>::bigUnindex(size_t i) const {
+template <typename T, size_t... ns>
+std::pair<size_t, size_t> NetiKAT<T, ns...>::bigUnindex(size_t i) const {
   return std::make_pair(i % matrixDim, floor(i / matrixDim));
 }
 
 // TODO: clean up, write more tests
 // TODO: normalize columns after pruning small values?
 // B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::star(TransitionMatrix<T> p) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::star(TransitionMatrix<T> p) const {
 
   Eigen::SparseMatrix<double> S(matrixDim * matrixDim, matrixDim * matrixDim);
   Eigen::SparseMatrix<double> U(matrixDim * matrixDim, matrixDim * matrixDim);
@@ -461,16 +467,18 @@ TransitionMatrix<T> NetiKAT<T>::star(TransitionMatrix<T> p) const {
 }
 
 // B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> p, T tol) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::starApprox(TransitionMatrix<T> p,
+                                                  T tol) const {
   size_t temp;
   return starApprox(p, tol, temp);
 }
 
 // B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> p, T tol,
-                                           size_t &iterationsNeeded) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T>
+NetiKAT<T, ns...>::starApprox(TransitionMatrix<T> p, T tol,
+                              size_t &iterationsNeeded) const {
   TransitionMatrix<T> oldS = skip();
   TransitionMatrix<T> s = amp(skip(), seq(oldS, p));
   iterationsNeeded = 1;
@@ -486,9 +494,9 @@ TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> p, T tol,
 }
 
 // B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::dumbStarApprox(TransitionMatrix<T> p,
-                                               size_t iter) const {
+template <typename T, size_t... ns>
+TransitionMatrix<T> NetiKAT<T, ns...>::dumbStarApprox(TransitionMatrix<T> p,
+                                                      size_t iter) const {
   TransitionMatrix<T> s = skip();
 
   for (size_t i = 0; i < iter; ++i) {
@@ -499,7 +507,8 @@ TransitionMatrix<T> NetiKAT<T>::dumbStarApprox(TransitionMatrix<T> p,
   return s;
 }
 
-template <typename T> void NetiKAT<T>::normalize(TransitionMatrix<T> &M) const {
+template <typename T, size_t... ns>
+void NetiKAT<T, ns...>::normalize(TransitionMatrix<T> &M) const {
   Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
   Eigen::VectorXd colSums = ones.transpose() * M;
   for (int k = 0; k < M.outerSize(); ++k) {

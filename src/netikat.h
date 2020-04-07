@@ -13,6 +13,7 @@
 #include <Eigen/SparseCore>
 
 #include "linear_algebra_utilities.h"
+#include "template_magic.h"
 #include "utils.h"
 
 using std::cerr;
@@ -30,9 +31,9 @@ using Packet = std::vector<size_t>;
 // The indices of the packets contained in this set
 using PacketSet = std::set<size_t>;
 
-template <typename T> class NetiKAT {
+template <typename T, size_t... ns> class NetiKAT {
 public:
-  NetiKAT(const PacketType &type_, size_t maxNumPackets_);
+  NetiKAT(size_t maxNumPackets_);
 
   PacketType packetType;
   size_t matrixDim;
