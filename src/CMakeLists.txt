@@ -10,7 +10,6 @@ add_library(
   linear_algebra_utilities.cpp
   utils.h
   utils.cpp
-  template_magic.h
 )
 target_link_libraries(Packets eigen)
 

@@ -13,7 +13,6 @@
 #include <Eigen/SparseCore>
 
 #include "linear_algebra_utilities.h"
-#include "template_magic.h"
 #include "utils.h"
 
 using std::cerr;
@@ -28,18 +27,17 @@ using PacketType = std::vector<size_t>;
 // Particular entry in each field
 using Packet = std::vector<size_t>;
 
-template <typename T, size_t... ns> class NetiKAT {
+// The indices of the packets contained in this set
+using PacketSet = std::set<size_t>;
+
+template <typename T> class NetiKAT {
 public:
-  NetiKAT(size_t maxNumPackets_);
+  NetiKAT(const PacketType &type_, size_t maxNumPackets_);
 
   PacketType packetType;
   size_t matrixDim;
   size_t possiblePackets;
   size_t maxNumPackets;
-
-  // The indices of the packets contained in this set
-  // using PacketSet = std::bitset<TemplateProduct<ns...>::value>;
-  using PacketSet = std::set<size_t>;
 
   // numNetiKATsOfSizeLessThan[i] is the number of packet sets of size less
   // than i
@@ -60,9 +58,6 @@ public:
   size_t index(const PacketSet &packets) const;
   Eigen::VectorXd toVec(const PacketSet &packets) const;
   PacketSet packetSetFromIndex(size_t idx) const;
-
-  template <typename... S>
-  PacketSet packetSetFromPacketIndices(S... indices) const;
 
   size_t bigIndex(size_t i, size_t j) const;
   std::pair<size_t, size_t> bigUnindex(size_t i) const;
