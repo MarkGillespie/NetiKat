@@ -19,9 +19,7 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
-struct lex_compare {};
-
-using TransitionMatrix = Eigen::SparseMatrix<double>;
+template <typename T> using TransitionMatrix = Eigen::SparseMatrix<T>;
 
 // Number of possible values for each field
 using PacketType = std::vector<size_t>;
@@ -32,7 +30,7 @@ using Packet = std::vector<size_t>;
 // The indices of the packets contained in this set
 using PacketSet = std::set<size_t>;
 
-class NetiKAT {
+template <typename T> class NetiKAT {
 public:
   NetiKAT(const PacketType &type_, size_t maxNumPackets_);
 
@@ -68,48 +66,50 @@ public:
   // index b
   size_t packetSetUnion(size_t a, size_t b) const;
 
-  TransitionMatrix drop() const;
-  TransitionMatrix skip() const;
+  TransitionMatrix<T> drop() const;
+  TransitionMatrix<T> skip() const;
 
   // B[fieldIndex = fieldValue]
-  TransitionMatrix test(size_t fieldIndex, size_t fieldValue) const;
+  TransitionMatrix<T> test(size_t fieldIndex, size_t fieldValue) const;
 
   // B[#fieldIndex = fieldValue : n]
-  TransitionMatrix testSize(size_t fieldIndex, size_t fieldValue,
-                            size_t n) const;
+  TransitionMatrix<T> testSize(size_t fieldIndex, size_t fieldValue,
+                               size_t n) const;
 
   // B[fieldIndex <- fieldValue]
-  TransitionMatrix set(size_t fieldIndex, size_t fieldValue) const;
+  TransitionMatrix<T> set(size_t fieldIndex, size_t fieldValue) const;
 
   // B[p & q]
   // TODO: this is stupidly show
-  TransitionMatrix amp(TransitionMatrix p, TransitionMatrix q) const;
+  TransitionMatrix<T> amp(TransitionMatrix<T> p, TransitionMatrix<T> q) const;
 
   // B[p;q]
-  TransitionMatrix seq(TransitionMatrix p, TransitionMatrix q) const;
+  TransitionMatrix<T> seq(TransitionMatrix<T> p, TransitionMatrix<T> q) const;
 
   // B[p \oplus_r q]
-  TransitionMatrix choice(double r, TransitionMatrix p,
-                          TransitionMatrix q) const;
+  TransitionMatrix<T> choice(T r, TransitionMatrix<T> p,
+                             TransitionMatrix<T> q) const;
 
   // B[p*]
-  TransitionMatrix star(TransitionMatrix p) const;
+  TransitionMatrix<T> star(TransitionMatrix<T> p) const;
 
   // B[p*]
   // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
   // less than tol
-  TransitionMatrix starApprox(TransitionMatrix p, double tol = 1e-12) const;
+  TransitionMatrix<T> starApprox(TransitionMatrix<T> p, T tol = 1e-12) const;
 
   // B[p*]
   // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
   // less than tol. Also returns how many iterations were needed
-  TransitionMatrix starApprox(TransitionMatrix p, double tol,
-                              size_t &iterationsNeeded) const;
+  TransitionMatrix<T> starApprox(TransitionMatrix<T> p, T tol,
+                                 size_t &iterationsNeeded) const;
 
   // B[p*]
   // Computes B[p^(iter)]
-  TransitionMatrix dumbStarApprox(TransitionMatrix p, size_t iter) const;
+  TransitionMatrix<T> dumbStarApprox(TransitionMatrix<T> p, size_t iter) const;
 
   // Make M stochastic by normalizing its columns to sum to 1
-  void normalize(TransitionMatrix &M) const;
+  void normalize(TransitionMatrix<T> &M) const;
 };
+
+#include "netikat.ipp"

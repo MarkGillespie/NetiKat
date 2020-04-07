@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8.9)
 add_library(
   Packets
   netikat.h
+  netikat.ipp
   netikat.cpp
   linear_algebra_utilities.h
   linear_algebra_utilities.ipp
@@ -15,6 +16,8 @@ target_link_libraries(Packets eigen)
 add_executable(
   benchmark
   benchmark.cpp
+  benchmark.ipp
+  benchmark.h
 )
 target_include_directories(benchmark PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include")
 target_link_libraries(benchmark Packets)
