@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8.9)
 
 add_library(
   Packets
-  TransitionMatrix.h
-  TransitionMatrix.cpp
+  netikat.h
+  netikat.cpp
   linear_algebra_utilities.h
   linear_algebra_utilities.ipp
   linear_algebra_utilities.cpp

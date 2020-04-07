@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 // clang-format off
-#include "TransitionMatrixTest.h"
+#include "NetikatTest.h"
 // clang-format on
 
 int main(int argc, char **argv) {

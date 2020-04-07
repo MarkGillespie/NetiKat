@@ -1,4 +1,4 @@
-#include "TransitionMatrix.h"
+#include "netikat.h"
 
 #include <stdlib.h> /* rand, malloc */
 #include <sys/mman.h>

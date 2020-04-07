@@ -1,4 +1,4 @@
-#include "TransitionMatrix.h"
+#include "netikat.h"
 
 NetiKAT::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
     : packetType(type_), maxNumPackets(maxNumPackets_) {
