@@ -42,9 +42,9 @@ TEST_F(NetikatTest, binomialCoefficients) {
 }
 
 TEST_F(NetikatTest, cachedBinomialCoefficients) {
-  NetiKAT<double> net(std::vector<size_t>{2}, 12);
-  size_t nCk = net.binomialCoefficient(56, 12);
-  size_t answer = 558383307300; // Solution computed in Mathematica
+  NetiKAT<double> net(std::vector<size_t>{10}, 2);
+  size_t nCk = net.binomialCoefficient(10, 2);
+  size_t answer = 45; // 10 * 9 / 2
 
   EXPECT_EQ(nCk, answer);
 }
