@@ -41,94 +41,73 @@ template <typename T> void benchmark(const NetiKAT<T> &neti, bool runFullStar) {
   std::clock_t start;
   double duration;
 
-  cout << "Generating Random Matrices . . ." << endl;
+  // cout << "Generating Random Matrices . . ." << endl;
 
-  // TODO: sample sparse stochastic matrices
   p = randomStochastic<T>(neti.matrixDim);
   q = randomStochastic<T>(neti.matrixDim);
 
-  cout << "Beginning Test" << endl;
+  // cout << "Beginning Test" << endl;
 
   // Skip
   start = std::clock();
   M = neti.skip();
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Skip took " << duration << "s on matrices of size " << neti.matrixDim
-       << endl
-       << endl;
+  cout << "Skip\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Drop
   start = std::clock();
   M = neti.drop();
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Drop took " << duration << "s on matrices of size " << neti.matrixDim
-       << endl
-       << endl;
+  cout << "Drop\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Test
   start = std::clock();
   M = neti.test(0, 1);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Test took " << duration << "s on matrices of size " << neti.matrixDim
-       << endl
-       << endl;
+  cout << "Test\t" << duration << "\t " << neti.matrixDim << endl;
 
   // TestSize
   start = std::clock();
   M = neti.testSize(0, 1, 2);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "TestSize took " << duration << "s on matrices of size "
-       << neti.matrixDim << endl
-       << endl;
+  cout << "TestSize\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Set
   start = std::clock();
   M = neti.set(0, 1);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Set took " << duration << "s on matrices of size " << neti.matrixDim
-       << endl
-       << endl;
+  cout << "Set\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Amp
   start = std::clock();
   M = neti.amp(p, q);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Amp took " << duration << "s on matrices of size " << neti.matrixDim
-       << endl
-       << endl;
+  cout << "Amp\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Seq
   start = std::clock();
   M = neti.seq(p, q);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Seq took " << duration << "s on matrices of size " << neti.matrixDim
-       << endl
-       << endl;
+  cout << "Seq\t" << duration << "\t " << neti.matrixDim << endl;
 
   // choice
   start = std::clock();
   M = neti.choice(0.25, p, q);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "Choice took " << duration << "s on matrices of size "
-       << neti.matrixDim << endl
-       << endl;
+  cout << "Choice\t" << duration << "\t " << neti.matrixDim << endl;
 
   // starApprox
   start = std::clock();
   M = neti.starApprox(p, 1e-8);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-  cout << "StarApprox(1e-12) took " << duration << "s on matrices of size "
-       << neti.matrixDim << endl
-       << endl;
+  cout << "StarApprox(1e-12)\t" << duration << "\t " << neti.matrixDim << endl;
 
   // star
   if (runFullStar) {
     start = std::clock();
     M = neti.star(p);
     duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-    cout << "Star took " << duration << "s on matrices of size "
-         << neti.matrixDim << endl
-         << endl;
+    cout << "Star\t" << duration << "\t " << neti.matrixDim << endl;
   }
 }
 
