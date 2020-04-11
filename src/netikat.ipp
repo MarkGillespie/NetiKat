@@ -19,9 +19,11 @@ NetiKAT<T>::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
               binom(possiblePackets, maxNumPackets);
 
   // TODO: use less memory?
+  // stores all n choose k for 0 <= n <= possiblePackets,
+  // 0 <= k <= maxNumPackets
   binomialCoefficients.reserve(pow(possiblePackets + 1, 2));
   for (size_t n = 0; n <= possiblePackets; ++n) {
-    for (size_t k = 0; k <= possiblePackets; ++k) {
+    for (size_t k = 0; k <= maxNumPackets; ++k) {
       if (k <= n) {
         binomialCoefficients.push_back(binom(n, k));
       } else {
@@ -33,19 +35,22 @@ NetiKAT<T>::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
 
 template <typename T>
 size_t NetiKAT<T>::binomialCoefficient(size_t n, size_t k) const {
-  if (k > n) {
-    throw std::invalid_argument(
-        "In binom(n, k), k must be less than or equal to n. But k is " +
-        std::to_string(k) + " and n is " + std::to_string(n));
-  } else if (n > possiblePackets) {
-    throw std::invalid_argument("I only precomputed binomials up to "
-                                "possiblePackets. But possiblePackets is " +
-                                std::to_string(possiblePackets) + " and n is " +
-                                std::to_string(n));
+  // if (k > n || k > maxNumPackets) {
+  //   throw std::invalid_argument("In binom(n, k), k must be less than or equal
+  //   "
+  //                               "to n and maxNumPackets. But k is " +
+  //                               std::to_string(k) + ", n is " +
+  //                               std::to_string(n) + ", and maxNumPackets is "
+  //                               + std::to_string(maxNumPackets));
+  // } else if (n > possiblePackets) {
+  //   throw std::invalid_argument("I only precomputed binomials up to "
+  //                               "possiblePackets. But possiblePackets is " +
+  //                               std::to_string(possiblePackets) + " and n is
+  //                               " + std::to_string(n));
 
-  } else {
-    return binomialCoefficients[k + n * (possiblePackets + 1)];
-  }
+  // } else {
+  return binomialCoefficients[k + n * (maxNumPackets + 1)];
+  // }
 }
 
 template <typename T> size_t NetiKAT<T>::packetIndex(const Packet &p) const {
