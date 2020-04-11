@@ -35,22 +35,7 @@ NetiKAT<T>::NetiKAT(const PacketType &type_, size_t maxNumPackets_)
 
 template <typename T>
 size_t NetiKAT<T>::binomialCoefficient(size_t n, size_t k) const {
-  // if (k > n || k > maxNumPackets) {
-  //   throw std::invalid_argument("In binom(n, k), k must be less than or equal
-  //   "
-  //                               "to n and maxNumPackets. But k is " +
-  //                               std::to_string(k) + ", n is " +
-  //                               std::to_string(n) + ", and maxNumPackets is "
-  //                               + std::to_string(maxNumPackets));
-  // } else if (n > possiblePackets) {
-  //   throw std::invalid_argument("I only precomputed binomials up to "
-  //                               "possiblePackets. But possiblePackets is " +
-  //                               std::to_string(possiblePackets) + " and n is
-  //                               " + std::to_string(n));
-
-  // } else {
   return binomialCoefficients[k + n * (maxNumPackets + 1)];
-  // }
 }
 
 template <typename T> size_t NetiKAT<T>::packetIndex(const Packet &p) const {
