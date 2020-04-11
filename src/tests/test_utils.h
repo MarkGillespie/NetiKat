@@ -10,6 +10,9 @@
 #define EXPECT_MAT_EQ(a, b) ExpectMatEq(a, b)
 #define EXPECT_MAT_NEAR(a, b, eps) ExpectMatEq(a, b, eps)
 
+#define EXPECT_OP_EQ(a, b, dim) ExpectOpEq(a, b, dim)
+#define EXPECT_OP_NEAR(a, b, dim, eps) ExpectOpEq(a, b, dim, eps)
+
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -42,10 +45,27 @@ Eigen::SparseMatrix<double> randomDenseStochastic(size_t n) {
   return M;
 }
 
-bool isStochastic(Eigen::SparseMatrix<double> M) {
-  Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
+// TODO: no point in making this sparse anymore
+std::function<Eigen::VectorXd(Eigen::VectorXd)>
+randomDenseStochasticOperator(size_t n) {
+  Eigen::SparseMatrix<double> denseStochastic = randomDenseStochastic(n);
+  // Capture the matrix by value so it doesn't magically disappear
+  std::function<Eigen::VectorXd(Eigen::VectorXd)> f =
+      [=](Eigen::VectorXd v) -> Eigen::VectorXd { return denseStochastic * v; };
+  return f;
+}
 
-  return (M.transpose() * ones - ones).norm() < 1e-8;
+bool isStochastic(std::function<Eigen::VectorXd(Eigen::VectorXd)> f,
+                  size_t dim) {
+  for (size_t i = 0; i < dim; ++i) {
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(dim);
+    v(i) = 1;
+    Eigen::VectorXd w = f(v);
+    if (abs(w.lpNorm<1>() - 1) > 1e-8) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // =============================================================
@@ -57,8 +77,8 @@ bool isStochastic(Eigen::SparseMatrix<double> M) {
 
 template <class Base> class EigenPrintWrap : public Base {
   friend void PrintTo(const EigenPrintWrap &m, ::std::ostream *o) {
-    size_t width = (m.cols() < 10) ? m.cols() : 10;
-    size_t height = (m.rows() < 10) ? m.rows() : 10;
+    size_t width = (m.cols() < 15) ? m.cols() : 15;
+    size_t height = (m.rows() < 15) ? m.rows() : 15;
     *o << "\n" << m.topLeftCorner(height, width) << "...";
   }
 };
@@ -107,6 +127,57 @@ Eigen::SparseMatrix<double> randomPositiveSparse(size_t n, double density) {
   Eigen::SparseMatrix<double> M(n, n);
   M.setFromTriplets(T.begin(), T.end());
   return M;
+}
+
+using Operator = std::function<Eigen::VectorXd(Eigen::VectorXd)>;
+
+Eigen::SparseMatrix<double> toMat(Operator op, size_t dim) {
+  std::vector<Eigen::Triplet<double>> trip;
+  for (size_t i = 0; i < dim; ++i) {
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(dim);
+    v(i) = 1;
+    Eigen::VectorXd ci = op(v);
+    for (size_t j = 0; j < dim; ++j) {
+      if (ci(j) > 1e-12) {
+        trip.emplace_back(j, i, ci(j));
+      }
+    }
+  }
+
+  Eigen::SparseMatrix<double> M(dim, dim);
+  M.setFromTriplets(std::begin(trip), std::end(trip));
+  return M;
+}
+
+bool OpEq(const Operator &a, const Operator &b, size_t dim, double threshold) {
+  for (size_t i = 0; i < dim; ++i) {
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(dim);
+    v(i) = 1;
+    Eigen::VectorXd av = a(v);
+    Eigen::VectorXd bv = b(v);
+
+    double err = (av - bv).norm();
+    if (threshold > 0) {
+      bool equal = abs(err) < threshold;
+      if (!equal) {
+        cerr << "norm of difference: " << err << endl;
+        return false;
+      }
+    } else {
+      const ::testing::internal::FloatingPoint<double> difference(err), zero(0);
+      bool equal = difference.AlmostEquals(zero);
+      if (!equal) {
+        cerr << "norm of difference: " << err << endl;
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+void ExpectOpEq(const Operator &a_, const Operator &b_, size_t dim,
+                double threshold = -1) {
+  EXPECT_PRED4(OpEq, a_, b_, dim, threshold);
 }
 
 #endif

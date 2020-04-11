@@ -19,7 +19,10 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
-template <typename T> using TransitionMatrix = Eigen::SparseMatrix<T>;
+template <typename T> using Distribution = Eigen::Matrix<T, Eigen::Dynamic, 1>;
+
+template <typename T>
+using TransitionMatrix = std::function<Distribution<T>(Distribution<T>)>;
 
 // Number of possible values for each field
 using PacketType = std::vector<size_t>;
@@ -59,9 +62,6 @@ public:
   Eigen::VectorXd toVec(const PacketSet &packets) const;
   PacketSet packetSetFromIndex(size_t idx) const;
 
-  size_t bigIndex(size_t i, size_t j) const;
-  std::pair<size_t, size_t> bigUnindex(size_t i) const;
-
   // Compute the union of the packet set with index a and the packet set with
   // index b
   size_t packetSetUnion(size_t a, size_t b) const;
@@ -80,8 +80,8 @@ public:
   TransitionMatrix<T> set(size_t fieldIndex, size_t fieldValue) const;
 
   // B[p & q]
-  // TODO: this is stupidly show
   TransitionMatrix<T> amp(TransitionMatrix<T> p, TransitionMatrix<T> q) const;
+  Distribution<T> amp(const Distribution<T> &p, const Distribution<T> &q) const;
 
   // B[p;q]
   TransitionMatrix<T> seq(TransitionMatrix<T> p, TransitionMatrix<T> q) const;
@@ -91,25 +91,17 @@ public:
                              TransitionMatrix<T> q) const;
 
   // B[p*]
-  TransitionMatrix<T> star(TransitionMatrix<T> p) const;
-
-  // B[p*]
   // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
   // less than tol
   TransitionMatrix<T> starApprox(TransitionMatrix<T> p, T tol = 1e-12) const;
-
-  // B[p*]
-  // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
-  // less than tol. Also returns how many iterations were needed
-  TransitionMatrix<T> starApprox(TransitionMatrix<T> p, T tol,
-                                 size_t &iterationsNeeded) const;
+  mutable size_t starIter = 0;
 
   // B[p*]
   // Computes B[p^(iter)]
   TransitionMatrix<T> dumbStarApprox(TransitionMatrix<T> p, size_t iter) const;
 
-  // Make M stochastic by normalizing its columns to sum to 1
-  void normalize(TransitionMatrix<T> &M) const;
+  // Make p a probability distribution by normalizing its column sum to 1
+  void normalize(Distribution<T> &p) const;
 };
 
 #include "netikat.ipp"

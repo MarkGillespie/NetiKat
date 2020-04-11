@@ -42,7 +42,8 @@ template <typename T> size_t NetiKAT<T>::packetIndex(const Packet &p) const {
   size_t idx = 0;
 
   size_t offset = 1;
-  for (size_t iF = 0; iF < p.size(); ++iF) {
+  // TODO: fix in other branches?
+  for (size_t iF = 0; iF < packetType.size(); ++iF) {
     idx += p[iF] * offset;
     offset *= packetType[iF];
   }
@@ -52,6 +53,7 @@ template <typename T> size_t NetiKAT<T>::packetIndex(const Packet &p) const {
 
 template <typename T> Packet NetiKAT<T>::packetFromIndex(size_t idx) const {
   Packet p;
+  p.reserve(packetType.size());
 
   for (size_t iF = 0; iF < packetType.size(); ++iF) {
     size_t field = idx % packetType[iF];
@@ -145,92 +147,95 @@ PacketSet NetiKAT<T>::packetSetFromIndex(size_t idx) const {
 }
 
 template <typename T> TransitionMatrix<T> NetiKAT<T>::drop() const {
-  Eigen::SparseMatrix<T> M(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<T>> trip;
-
-  for (size_t i = 0; i < matrixDim; ++i) {
-    trip.emplace_back(0, i, 1);
-  }
-
-  M.setFromTriplets(trip.begin(), trip.end());
-  return M;
+  TransitionMatrix<T> f = [&](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    pOut(0) = 1;
+    return pOut;
+  };
+  return f;
 }
 
 template <typename T> TransitionMatrix<T> NetiKAT<T>::skip() const {
-  return speye(matrixDim);
+  TransitionMatrix<T> f = [&](Distribution<T> p) -> Distribution<T> {
+    return p;
+  };
+  return f;
 }
 
 // B[fieldIndex = fieldValue]
 template <typename T>
 TransitionMatrix<T> NetiKAT<T>::test(size_t fieldIndex,
                                      size_t fieldValue) const {
-  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<double>> trip;
-
-  for (size_t i = 0; i < matrixDim; ++i) {
-    PacketSet packetsIn = packetSetFromIndex(i);
-    PacketSet packetsOut;
-    for (size_t iP : packetsIn) {
-      Packet p = packetFromIndex(iP);
-      if (p[fieldIndex] == fieldValue) {
-        packetsOut.insert(packetIndex(p));
+  // Capture fieldIndex and fieldValue by value, all other NetiKAT member
+  // variables by reference
+  TransitionMatrix<T> f = [&, fieldIndex,
+                           fieldValue](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    for (size_t i = 0; i < matrixDim; ++i) {
+      PacketSet packetsIn = packetSetFromIndex(i);
+      PacketSet packetsOut;
+      for (size_t iP : packetsIn) {
+        Packet p = packetFromIndex(iP);
+        if (p[fieldIndex] == fieldValue) {
+          packetsOut.insert(packetIndex(p));
+        }
       }
+      pOut[index(packetsOut)] += p[i];
     }
-    trip.emplace_back(index(packetsOut), i, 1);
-  }
-
-  M.setFromTriplets(trip.begin(), trip.end());
-  return M;
+    return pOut;
+  };
+  return f;
 }
 
 // B[#fieldIndex = fieldValue : n]
 template <typename T>
 TransitionMatrix<T> NetiKAT<T>::testSize(size_t fieldIndex, size_t fieldValue,
                                          size_t n) const {
-  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<double>> trip;
-
-  for (size_t i = 0; i < matrixDim; ++i) {
-    PacketSet packetsIn = packetSetFromIndex(i);
-    size_t nPacketsOut = 0;
-    for (size_t iP : packetsIn) {
-      Packet p = packetFromIndex(iP);
-      if (p[fieldIndex] == fieldValue) {
-        nPacketsOut += 1;
+  // Capture fieldIndex, fieldValue, and n by value, all other NetiKAT member
+  // variables by reference
+  TransitionMatrix<T> f = [&, fieldIndex, fieldValue,
+                           n](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    for (size_t i = 0; i < matrixDim; ++i) {
+      PacketSet packetsIn = packetSetFromIndex(i);
+      size_t nPacketsOut = 0;
+      for (size_t iP : packetsIn) {
+        Packet p = packetFromIndex(iP);
+        if (p[fieldIndex] == fieldValue) {
+          nPacketsOut += 1;
+        }
+      }
+      if (nPacketsOut == n) {
+        pOut[i] = p[i];
       }
     }
-
-    if (nPacketsOut == n) {
-      trip.emplace_back(i, i, 1);
-    } else {
-      trip.emplace_back(i, 0, 1);
-    }
-  }
-
-  M.setFromTriplets(trip.begin(), trip.end());
-  return M;
+    return pOut;
+  };
+  return f;
 }
 
 // B[fieldIndex <- fieldValue]
 template <typename T>
 TransitionMatrix<T> NetiKAT<T>::set(size_t fieldIndex,
                                     size_t fieldValue) const {
-  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<double>> trip;
-
-  for (size_t i = 0; i < matrixDim; ++i) {
-    PacketSet packetsIn = packetSetFromIndex(i);
-    PacketSet packetsOut;
-    for (size_t iP : packetsIn) {
-      Packet p = packetFromIndex(iP);
-      p[fieldIndex] = fieldValue;
-      packetsOut.insert(packetIndex(p));
+  // Capture fieldIndex and fieldValue by value, all other NetiKAT member
+  // variables by reference
+  TransitionMatrix<T> f = [&, fieldIndex,
+                           fieldValue](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    for (size_t i = 0; i < matrixDim; ++i) {
+      PacketSet packetsIn = packetSetFromIndex(i);
+      PacketSet packetsOut;
+      for (size_t iP : packetsIn) {
+        Packet p = packetFromIndex(iP);
+        p[fieldIndex] = fieldValue;
+        packetsOut.insert(packetIndex(p));
+      }
+      pOut[index(packetsOut)] += p[i];
     }
-    trip.emplace_back(index(packetsOut), i, 1);
-  }
-
-  M.setFromTriplets(trip.begin(), trip.end());
-  return M;
+    return pOut;
+  };
+  return f;
 }
 
 template <typename T>
@@ -243,258 +248,108 @@ size_t NetiKAT<T>::packetSetUnion(size_t a, size_t b) const {
 
 // B[p & q]
 template <typename T>
-TransitionMatrix<T> NetiKAT<T>::amp(TransitionMatrix<T> p,
-                                    TransitionMatrix<T> q) const {
+Distribution<T> NetiKAT<T>::amp(const Distribution<T> &p,
+                                const Distribution<T> &q) const {
+  Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
 
-  // Sort nonzero entries by "a" value
-  // Map each a to {(b, val)}
-  // (a is col, b is row)
-  std::vector<std::vector<std::pair<size_t, double>>> pTriplets, qTriplets;
-  pTriplets.resize(matrixDim);
-  qTriplets.resize(matrixDim);
-  for (int kP = 0; kP < p.outerSize(); ++kP) {
-    for (Eigen::SparseMatrix<double>::InnerIterator itP(p, kP); itP; ++itP) {
-      pTriplets[itP.col()].emplace_back(itP.row(), itP.value());
+  for (size_t iP = 0; iP < matrixDim; ++iP) {
+    if (p(iP) < 1e-12) {
+      continue;
     }
-  }
-  for (int kQ = 0; kQ < q.outerSize(); ++kQ) {
-    for (Eigen::SparseMatrix<double>::InnerIterator itQ(q, kQ); itQ; ++itQ) {
-      qTriplets[itQ.col()].emplace_back(itQ.row(), itQ.value());
-    }
-  }
-
-  Eigen::SparseMatrix<double> M(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<double>> trip;
-
-  size_t bP, bQ;
-  double valP, valQ;
-  for (size_t a = 0; a < matrixDim; ++a) {
-    for (std::pair<size_t, double> pPair : pTriplets[a]) {
-      std::tie(bP, valP) = pPair;
-      for (std::pair<size_t, double> qPair : qTriplets[a]) {
-        std::tie(bQ, valQ) = qPair;
-
-        if (valP * valQ > 1e-12) {
-          size_t packetUnion = packetSetUnion(bP, bQ);
-          trip.emplace_back(packetUnion, a, valP * valQ);
-        }
+    for (size_t iQ = 0; iQ < matrixDim; ++iQ) {
+      double prob = p(iP) * q(iQ);
+      if (prob > 1e-12) {
+        size_t packetUnion = packetSetUnion(iP, iQ);
+        pOut[packetUnion] += prob;
       }
     }
   }
+  normalize(pOut);
+  return pOut;
+}
 
-  M.setFromTriplets(trip.begin(), trip.end());
-  normalize(M);
-  return M;
+template <typename T>
+TransitionMatrix<T> NetiKAT<T>::amp(TransitionMatrix<T> a,
+                                    TransitionMatrix<T> b) const {
+  // TODO: capture by reference instead?
+  // Capture a and b by value so they don't disappear
+  TransitionMatrix<T> f = [&, a, b](Distribution<T> p) -> Distribution<T> {
+    return amp(a(p), b(p));
+  };
+  return f;
 }
 
 // B[p;q]
 template <typename T>
-TransitionMatrix<T> NetiKAT<T>::seq(TransitionMatrix<T> p,
-                                    TransitionMatrix<T> q) const {
-  return p * q;
+TransitionMatrix<T> NetiKAT<T>::seq(TransitionMatrix<T> a,
+                                    TransitionMatrix<T> b) const {
+  // TODO: capture by reference instead?
+  // Capture a and b by value so they don't disappear
+  TransitionMatrix<T> f = [&, a, b](Distribution<T> p) -> Distribution<T> {
+    return a(b(p));
+  };
+  return f;
 }
 
 // B[p \oplus_r q]
 template <typename T>
-TransitionMatrix<T> NetiKAT<T>::choice(T r, TransitionMatrix<T> p,
-                                       TransitionMatrix<T> q) const {
-  return r * p + (1 - r) * q;
-}
-
-template <typename T> size_t NetiKAT<T>::bigIndex(size_t i, size_t j) const {
-  return i + matrixDim * j;
-}
-
-template <typename T>
-std::pair<size_t, size_t> NetiKAT<T>::bigUnindex(size_t i) const {
-  return std::make_pair(i % matrixDim, floor(i / matrixDim));
-}
-
-// TODO: clean up, write more tests
-// TODO: normalize columns after pruning small values?
-// B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::star(TransitionMatrix<T> p) const {
-
-  Eigen::SparseMatrix<double> S(matrixDim * matrixDim, matrixDim * matrixDim);
-  Eigen::SparseMatrix<double> U(matrixDim * matrixDim, matrixDim * matrixDim);
-
-  std::vector<Eigen::Triplet<double>> Ts, Tu;
-
-  auto nonzeros = [](Eigen::VectorXd v) {
-    std::string out;
-    for (size_t i = 0; i < v.size(); ++i) {
-      if (v(i) > 1e-8) {
-        out += std::to_string(i) + " ";
-      }
-    }
-    return out;
+TransitionMatrix<T> NetiKAT<T>::choice(T r, TransitionMatrix<T> a,
+                                       TransitionMatrix<T> b) const {
+  // TODO: capture by reference instead?
+  // Capture a and b by value so they don't disappear
+  TransitionMatrix<T> f = [&, a, b, r](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> ap = a(p);
+    Distribution<T> bp = b(p);
+    return r * ap + (1 - r) * bp;
   };
+  return f;
+}
 
-  std::vector<std::vector<size_t>> ancestors;
-  for (size_t a = 0; a < matrixDim * matrixDim; ++a) {
-    ancestors.push_back(std::vector<size_t>());
-  }
+// B[p*]
+template <typename T>
+TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> a, T tol) const {
 
-  for (size_t a = 0; a < matrixDim; ++a) {
-    for (size_t b = 0; b < matrixDim; ++b) {
-      size_t col = bigIndex(a, b);
-
-      Eigen::VectorXd aVec = Eigen::VectorXd::Zero(matrixDim);
-      aVec(a) = 1;
-      Eigen::VectorXd aPrimeVec = p * aVec;
-
-      for (size_t aPrime = 0; aPrime < matrixDim; ++aPrime) {
-        if (abs(aPrimeVec(aPrime)) < 1e-8) {
-          continue;
-        }
-        // Take union of sets
-        size_t bPrime = packetSetUnion(a, b);
-        size_t row = bigIndex(aPrime, bPrime);
-        Ts.emplace_back(row, col, aPrimeVec(aPrime));
-        ancestors[row].push_back(col);
-      }
+  // TODO: capture by reference instead?
+  // Capture a and b by value so they don't disappear
+  TransitionMatrix<T> f = [&, a, tol](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> oldS = p;
+    Distribution<T> s = amp(p, a(oldS));
+    starIter = 0;
+    while ((s - oldS).norm() > tol) {
+      oldS = s;
+      s = amp(p, a(s));
+      normalize(s);
+      starIter++;
     }
-  }
-
-  Vector<bool> isSaturated = Vector<bool>::Ones(matrixDim * matrixDim);
-  std::function<void(size_t)> markUnsaturated = [ancestors, &isSaturated,
-                                                 &markUnsaturated](size_t ind) {
-    isSaturated(ind) = false;
-    for (size_t a : ancestors[ind]) {
-      if (isSaturated(a)) {
-        markUnsaturated(a);
-      }
-    }
+    return s;
   };
-
-  S.setFromTriplets(Ts.begin(), Ts.end());
-  for (int k = 0; k < S.outerSize(); ++k) {
-    for (Eigen::SparseMatrix<double>::InnerIterator it(S, k); it; ++it) {
-      size_t a, b, aPrime, bPrime;
-      std::tie(a, b) = bigUnindex(it.col());
-      std::tie(aPrime, bPrime) = bigUnindex(it.row());
-
-      if (b != bPrime) {
-        markUnsaturated(it.col());
-      }
-    }
-  }
-  ancestors.clear();
-
-  for (size_t a = 0; a < matrixDim; ++a) {
-    for (size_t b = 0; b < matrixDim; ++b) {
-      size_t col = bigIndex(a, b);
-      if (isSaturated(col)) {
-        size_t row = bigIndex(0, b);
-        Tu.emplace_back(row, col, 1);
-      } else {
-        size_t row = bigIndex(a, b);
-        Tu.emplace_back(row, col, 1);
-      }
-    }
-  }
-
-  Vector<bool> isAbsorbing = Vector<bool>::Zero(matrixDim * matrixDim);
-  for (size_t b = 0; b < matrixDim; ++b) {
-    isAbsorbing(bigIndex(0, b)) = true;
-  }
-
-  U.setFromTriplets(Tu.begin(), Tu.end());
-  Ts.clear();
-  Tu.clear();
-
-  Eigen::SparseMatrix<double> SU = S * U;
-  S.resize(0, 0);
-  U.resize(0, 0);
-
-  BlockDecompositionResult<double> decomp =
-      blockDecomposeSquare(SU, isAbsorbing);
-
-  Eigen::SparseMatrix<double> Rt = decomp.AB.transpose();
-  const Eigen::SparseMatrix<double> &Q = decomp.BB;
-
-  Eigen::SparseMatrix<double> IminusQ = (speye(Q.rows()) - Q).transpose();
-  Eigen::SparseMatrix<double> X = solveSquare(IminusQ, Rt).transpose();
-  Rt.resize(0, 0);
-
-  Eigen::SparseMatrix<double> limit =
-      reassembleMatrix(decomp, speye(decomp.AA.rows()), X);
-
-  // Check that limit is really limit
-  Eigen::SparseMatrix<double> SUlimit = SU * limit;
-  double err = (SUlimit - limit).norm();
-  if (err > 1e-12) {
-    cerr << "Error: limit wrong somehow" << endl;
-    exit(1);
-  }
-
-  Eigen::SparseMatrix<double> smallLimit(matrixDim, matrixDim);
-  std::vector<Eigen::Triplet<double>> trip;
-
-  for (int k = 0; k < limit.outerSize(); ++k) {
-    for (Eigen::SparseMatrix<double>::InnerIterator it(limit, k); it; ++it) {
-      if (abs(it.value()) < 1e-8) {
-        continue;
-      }
-      size_t a, b, aPrime, bPrime;
-      std::tie(a, b) = bigUnindex(it.col());
-      std::tie(aPrime, bPrime) = bigUnindex(it.row());
-      if (aPrime == 0 && b == 0) {
-        trip.emplace_back(bPrime, a, it.value());
-      }
-    }
-  }
-
-  smallLimit.setFromTriplets(trip.begin(), trip.end());
-  return smallLimit;
+  return f;
 }
 
 // B[p*]
 template <typename T>
-TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> p, T tol) const {
-  size_t temp;
-  return starApprox(p, tol, temp);
-}
-
-// B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> p, T tol,
-                                           size_t &iterationsNeeded) const {
-  TransitionMatrix<T> oldS = skip();
-  TransitionMatrix<T> s = amp(skip(), seq(oldS, p));
-  iterationsNeeded = 1;
-
-  while ((s - oldS).norm() > tol) {
-    oldS = s;
-    s = amp(skip(), seq(s, p));
-    normalize(s);
-    iterationsNeeded++;
-  }
-
-  return s;
-}
-
-// B[p*]
-template <typename T>
-TransitionMatrix<T> NetiKAT<T>::dumbStarApprox(TransitionMatrix<T> p,
+TransitionMatrix<T> NetiKAT<T>::dumbStarApprox(TransitionMatrix<T> a,
                                                size_t iter) const {
-  TransitionMatrix<T> s = skip();
-
-  for (size_t i = 0; i < iter; ++i) {
-    s = amp(skip(), seq(s, p));
-    normalize(s);
-  }
-
-  return s;
+  // TODO: capture by reference instead?
+  // Capture a and b by value so they don't disappear
+  TransitionMatrix<T> f = [&, a, iter](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> s = p;
+    for (size_t i = 0; i < iter; ++i) {
+      s = amp(p, a(s));
+      normalize(s);
+    }
+    return s;
+  };
+  return f;
 }
 
-template <typename T> void NetiKAT<T>::normalize(TransitionMatrix<T> &M) const {
-  Eigen::VectorXd ones = Eigen::VectorXd::Ones(M.rows());
-  Eigen::VectorXd colSums = ones.transpose() * M;
-  for (int k = 0; k < M.outerSize(); ++k) {
-    for (Eigen::SparseMatrix<double>::InnerIterator it(M, k); it; ++it) {
-      it.valueRef() /= colSums(it.col());
-    }
+// Make p a probability distribution by normalizing its column sum to 1
+template <typename T> void NetiKAT<T>::normalize(Distribution<T> &p) const {
+
+  double colSum = 0;
+  for (size_t i = 0; i < matrixDim; ++i) {
+    p(i) = abs(p(i)); // TODO: is this necessary? is it slow?
+    colSum += p(i);
   }
+  p /= colSum;
 }

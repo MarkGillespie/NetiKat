@@ -7,7 +7,7 @@ template <typename T> T fRand(T fMin, T fMax) {
 // Generate a random stochastic matrix of size nxn with entriesPerCol nonzero
 // entries per column. Default value of entriesPerCol is 24
 template <typename T>
-Eigen::SparseMatrix<T> randomStochastic(size_t n, size_t entriesPerCol) {
+TransitionMatrix<T> randomTransitionMatrix(size_t n, size_t entriesPerCol) {
   Eigen::SparseMatrix<T> M(n, n);
   std::vector<Eigen::Triplet<double>> trip;
   trip.reserve(entriesPerCol * n);
@@ -33,82 +33,89 @@ Eigen::SparseMatrix<T> randomStochastic(size_t n, size_t entriesPerCol) {
 
   M.setFromTriplets(std::begin(trip), std::end(trip));
 
-  return M;
+  TransitionMatrix<T> f = [=](Distribution<T> p) -> Distribution<T> {
+    return M * p;
+  };
+
+  return f;
 }
 
 template <typename T> void benchmark(const NetiKAT<T> &neti, bool runFullStar) {
-  TransitionMatrix<T> M, p, q;
+  TransitionMatrix<T> M, a, b;
+  Distribution<T> v;
   std::clock_t start;
   double duration;
 
   // cout << "Generating Random Matrices . . ." << endl;
 
-  p = randomStochastic<T>(neti.matrixDim);
-  q = randomStochastic<T>(neti.matrixDim);
+  a = randomTransitionMatrix<T>(neti.matrixDim);
+  b = randomTransitionMatrix<T>(neti.matrixDim);
+  v = Eigen::VectorXd::Random(neti.matrixDim);
 
   // cout << "Beginning Test" << endl;
 
   // Skip
   start = std::clock();
   M = neti.skip();
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Skip\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Drop
   start = std::clock();
   M = neti.drop();
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Drop\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Test
   start = std::clock();
   M = neti.test(0, 1);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Test\t" << duration << "\t " << neti.matrixDim << endl;
 
   // TestSize
   start = std::clock();
   M = neti.testSize(0, 1, 2);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "TestSize\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Set
   start = std::clock();
   M = neti.set(0, 1);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Set\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Amp
   start = std::clock();
-  M = neti.amp(p, q);
+  M = neti.amp(a, b);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Amp\t" << duration << "\t " << neti.matrixDim << endl;
 
   // Seq
   start = std::clock();
-  M = neti.seq(p, q);
+  M = neti.seq(a, b);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Seq\t" << duration << "\t " << neti.matrixDim << endl;
 
   // choice
   start = std::clock();
-  M = neti.choice(0.25, p, q);
+  M = neti.choice(0.25, a, b);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "Choice\t" << duration << "\t " << neti.matrixDim << endl;
 
   // starApprox
   start = std::clock();
-  M = neti.starApprox(p, 1e-8);
+  M = neti.starApprox(a, 1e-8);
+  M(v);
   duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
   cout << "StarApprox(1e-12)\t" << duration << "\t " << neti.matrixDim << endl;
-
-  // star
-  if (runFullStar) {
-    start = std::clock();
-    M = neti.star(p);
-    duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
-    cout << "Star\t" << duration << "\t " << neti.matrixDim << endl;
-  }
 }
 
 template <typename T> void starParameterSweep() {
@@ -120,7 +127,7 @@ template <typename T> void starParameterSweep() {
     NetiKAT<T> neti = NetiKAT<T>(std::vector<size_t>{n}, 3);
     for (size_t entries = 2; entries < std::min(neti.matrixDim, (size_t)16);
          entries *= 2) {
-      TransitionMatrix<T> p = randomStochastic(neti.matrixDim, entries);
+      TransitionMatrix<T> p = randomTransitionMatrix(neti.matrixDim, entries);
       std::clock_t start = std::clock();
       // neti.star(p);
       size_t iterations;
