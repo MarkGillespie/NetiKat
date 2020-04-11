@@ -19,7 +19,9 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
-template <typename T> using Distribution = Eigen::Matrix<T, Eigen::Dynamic, 1>;
+// template <typename T> using Distribution = Eigen::Matrix<T, Eigen::Dynamic,
+// 1>; "Sparse Vector"
+template <typename T> using Distribution = std::unordered_map<size_t, T>;
 
 template <typename T>
 using TransitionMatrix = std::function<Distribution<T>(Distribution<T>)>;
@@ -59,7 +61,7 @@ public:
   // ordered lexicographically
   // Packet sets which are too big get index 0
   size_t index(const PacketSet &packets) const;
-  Eigen::VectorXd toVec(const PacketSet &packets) const;
+  Distribution<T> toVec(const PacketSet &packets) const;
   PacketSet packetSetFromIndex(size_t idx) const;
 
   // Compute the union of the packet set with index a and the packet set with

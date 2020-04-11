@@ -1,9 +1,3 @@
-// Generate a random floating point number between fMin and fMax
-template <typename T> T fRand(T fMin, T fMax) {
-  T f = (T)rand() / (RAND_MAX + 1.0);
-  return fMin + f * (fMax - fMin);
-}
-
 // Generate a random stochastic matrix of size nxn with entriesPerCol nonzero
 // entries per column. Default value of entriesPerCol is 24
 template <typename T>
@@ -34,7 +28,22 @@ TransitionMatrix<T> randomTransitionMatrix(size_t n, size_t entriesPerCol) {
   M.setFromTriplets(std::begin(trip), std::end(trip));
 
   TransitionMatrix<T> f = [=](Distribution<T> p) -> Distribution<T> {
-    return M * p;
+    // TODO: you really shouldn't do this
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(n);
+
+    // Iterate over an unordered_map using range based for loop
+    for (std::pair<std::size_t, T> entry : p) {
+      v(entry.first) = entry.second;
+    }
+
+    Eigen::VectorXd Mv = M * v;
+    std::unordered_map<size_t, T> pOut;
+    for (size_t i = 0; i < n; ++i) {
+      if (Mv(i) > 1e-8) {
+        pOut[i] = Mv(i);
+      }
+    }
+    return pOut;
   };
 
   return f;
@@ -46,13 +55,16 @@ template <typename T> void benchmark(const NetiKAT<T> &neti, bool runFullStar) {
   std::clock_t start;
   double duration;
 
-  // cout << "Generating Random Matrices . . ." << endl;
+  cout << "Generating Random Matrices of size " << neti.matrixDim << " . . ."
+       << endl;
 
   a = randomTransitionMatrix<T>(neti.matrixDim);
   b = randomTransitionMatrix<T>(neti.matrixDim);
-  v = Eigen::VectorXd::Random(neti.matrixDim);
+  // TODO: control density
+  v = randMap(neti.matrixDim, 24, 0.0, 1.0);
+  neti.normalize(v);
 
-  // cout << "Beginning Test" << endl;
+  cout << "Beginning Test" << endl;
 
   // Skip
   start = std::clock();

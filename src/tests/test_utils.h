@@ -7,11 +7,10 @@
 
 #include <stdlib.h> /* rand */
 
+#include <unordered_map>
+
 #define EXPECT_MAT_EQ(a, b) ExpectMatEq(a, b)
 #define EXPECT_MAT_NEAR(a, b, eps) ExpectMatEq(a, b, eps)
-
-#define EXPECT_OP_EQ(a, b, dim) ExpectOpEq(a, b, dim)
-#define EXPECT_OP_NEAR(a, b, dim, eps) ExpectOpEq(a, b, dim, eps)
 
 using std::cerr;
 using std::cout;
@@ -46,22 +45,52 @@ Eigen::SparseMatrix<double> randomDenseStochastic(size_t n) {
 }
 
 // TODO: no point in making this sparse anymore
-std::function<Eigen::VectorXd(Eigen::VectorXd)>
+// TODO: logic duplicated in benchmark.ipp
+std::function<
+    std::unordered_map<size_t, double>(std::unordered_map<size_t, double>)>
 randomDenseStochasticOperator(size_t n) {
-  Eigen::SparseMatrix<double> denseStochastic = randomDenseStochastic(n);
+  Eigen::SparseMatrix<double> M = randomDenseStochastic(n);
+
   // Capture the matrix by value so it doesn't magically disappear
-  std::function<Eigen::VectorXd(Eigen::VectorXd)> f =
-      [=](Eigen::VectorXd v) -> Eigen::VectorXd { return denseStochastic * v; };
+  std::function<std::unordered_map<size_t, double>(
+      std::unordered_map<size_t, double>)>
+      f = [=](std::unordered_map<size_t, double> p)
+      -> std::unordered_map<size_t, double> {
+    // TODO: you really shouldn't do this
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(n);
+
+    // Iterate over an unordered_map using range based for loop
+    for (std::pair<std::size_t, double> entry : p) {
+      v(entry.first) = entry.second;
+    }
+
+    Eigen::VectorXd Mv = M * v;
+    std::unordered_map<size_t, double> pOut;
+    for (size_t i = 0; i < n; ++i) {
+      if (Mv(i) > 1e-8) {
+        pOut[i] = Mv(i);
+      }
+    }
+    return pOut;
+  };
+
   return f;
 }
 
-bool isStochastic(std::function<Eigen::VectorXd(Eigen::VectorXd)> f,
+bool isStochastic(std::function<std::unordered_map<size_t, double>(
+                      std::unordered_map<size_t, double>)>
+                      f,
                   size_t dim) {
   for (size_t i = 0; i < dim; ++i) {
-    Eigen::VectorXd v = Eigen::VectorXd::Zero(dim);
-    v(i) = 1;
-    Eigen::VectorXd w = f(v);
-    if (abs(w.lpNorm<1>() - 1) > 1e-8) {
+    std::unordered_map<size_t, double> v;
+    v[i] = 1;
+    std::unordered_map<size_t, double> w = f(v);
+    double wSum = 0;
+    for (std::pair<std::size_t, double> entry : w) {
+      wSum += entry.second;
+    }
+
+    if (abs(wSum - 1) > 1e-8) {
       return false;
     }
   }
@@ -129,18 +158,17 @@ Eigen::SparseMatrix<double> randomPositiveSparse(size_t n, double density) {
   return M;
 }
 
-using Operator = std::function<Eigen::VectorXd(Eigen::VectorXd)>;
+using Operator = std::function<std::unordered_map<size_t, double>(
+    std::unordered_map<size_t, double>)>;
 
 Eigen::SparseMatrix<double> toMat(Operator op, size_t dim) {
   std::vector<Eigen::Triplet<double>> trip;
   for (size_t i = 0; i < dim; ++i) {
-    Eigen::VectorXd v = Eigen::VectorXd::Zero(dim);
-    v(i) = 1;
-    Eigen::VectorXd ci = op(v);
-    for (size_t j = 0; j < dim; ++j) {
-      if (ci(j) > 1e-12) {
-        trip.emplace_back(j, i, ci(j));
-      }
+    std::unordered_map<size_t, double> v;
+    v[i] = 1;
+    std::unordered_map<size_t, double> ci = op(v);
+    for (std::pair<size_t, double> entry : ci) {
+      trip.emplace_back(entry.first, i, entry.second);
     }
   }
 
@@ -148,36 +176,4 @@ Eigen::SparseMatrix<double> toMat(Operator op, size_t dim) {
   M.setFromTriplets(std::begin(trip), std::end(trip));
   return M;
 }
-
-bool OpEq(const Operator &a, const Operator &b, size_t dim, double threshold) {
-  for (size_t i = 0; i < dim; ++i) {
-    Eigen::VectorXd v = Eigen::VectorXd::Zero(dim);
-    v(i) = 1;
-    Eigen::VectorXd av = a(v);
-    Eigen::VectorXd bv = b(v);
-
-    double err = (av - bv).norm();
-    if (threshold > 0) {
-      bool equal = abs(err) < threshold;
-      if (!equal) {
-        cerr << "norm of difference: " << err << endl;
-        return false;
-      }
-    } else {
-      const ::testing::internal::FloatingPoint<double> difference(err), zero(0);
-      bool equal = difference.AlmostEquals(zero);
-      if (!equal) {
-        cerr << "norm of difference: " << err << endl;
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-void ExpectOpEq(const Operator &a_, const Operator &b_, size_t dim,
-                double threshold = -1) {
-  EXPECT_PRED4(OpEq, a_, b_, dim, threshold);
-}
-
 #endif

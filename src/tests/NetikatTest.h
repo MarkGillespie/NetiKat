@@ -51,14 +51,15 @@ TEST_F(NetikatTest, cachedBinomialCoefficients) {
 
 TEST_F(NetikatTest, normalizedVectorIsStochastic) {
   size_t dim = neti->matrixDim;
-  Distribution<double> v = Eigen::VectorXd::Random(dim);
-  for (size_t i = 0; i < dim; ++i) {
-    v(i) = abs(v(i));
-  }
+  Distribution<double> v = randMap(dim, 24, 0.0, 1.1);
 
   neti->normalize(v);
-  Eigen::VectorXd ones = Eigen::VectorXd::Ones(dim);
-  double colSum = v.transpose() * ones;
+
+  double colSum = 0;
+  // Iterate over an unordered_map using range based for loop
+  for (std::pair<std::size_t, double> entry : v) {
+    colSum += entry.second;
+  }
 
   EXPECT_NEAR(colSum, 1, 1e-8);
 }
@@ -81,52 +82,51 @@ TEST_F(NetikatTest, Skip) {
   TransitionMatrix<double> skipMat = neti->skip();
 
   // Generate a random probability distribution
-  Eigen::VectorXd v = Eigen::VectorXd::Random(neti->matrixDim);
-  for (size_t i = 0; i < neti->matrixDim; ++i) {
-    v(i) = abs(v(i));
-  }
-  v /= v.lpNorm<1>();
+  Distribution<double> v = randNormalizedMap<double>(neti->matrixDim, 24);
 
-  Eigen::VectorXd skipV = skipMat(v);
+  Distribution<double> skipV = skipMat(v);
 
-  EXPECT_MAT_EQ(v, skipV);
+  Eigen::VectorXd vVec = toVec(v);
+  Eigen::VectorXd skipVVec = toVec(skipV);
+  EXPECT_MAT_EQ(vVec, skipVVec);
 }
 
 TEST_F(NetikatTest, Drop) {
   TransitionMatrix<double> dropMat = neti->drop();
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1)});
+  Distribution<double> v = neti->toVec(PacketSet{pkt(1)});
 
-  Eigen::VectorXd droppedVec = dropMat(v);
+  Eigen::VectorXd droppedVec = toVec(dropMat(v));
 
-  Eigen::VectorXd trueDroppedVec = neti->toVec(PacketSet());
+  Eigen::VectorXd trueDroppedVec = toVec(neti->toVec(PacketSet()));
 
   EXPECT_MAT_EQ(droppedVec, trueDroppedVec);
 }
 
 TEST_F(NetikatTest, Test) {
   TransitionMatrix<double> testMat = neti->test(0, 1);
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(0), pkt(1)});
-  Eigen::VectorXd testedVec = testMat(v);
+  Distribution<double> v = neti->toVec(PacketSet{pkt(0), pkt(1)});
 
-  Eigen::VectorXd trueTestedVec = neti->toVec(PacketSet{pkt(1)});
+  Eigen::VectorXd testedVec = toVec(testMat(v));
+  Eigen::VectorXd trueTestedVec = toVec(neti->toVec(PacketSet{pkt(1)}));
 
   EXPECT_MAT_EQ(testedVec, trueTestedVec);
 }
 
 TEST_F(NetikatTest, TestSize) {
   TransitionMatrix<double> testMat = neti->testSize(0, 1, 2);
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1, 1), pkt(1, 0)});
-  Eigen::VectorXd testedVec = testMat(v);
+  Distribution<double> v = neti->toVec(PacketSet{pkt(1, 1), pkt(1, 0)});
+  Eigen::VectorXd vVec = toVec(v);
+  Eigen::VectorXd testedVec = toVec(testMat(v));
 
-  EXPECT_MAT_EQ(testedVec, v);
+  EXPECT_MAT_EQ(testedVec, vVec);
 }
 
 TEST_F(NetikatTest, Set) {
   TransitionMatrix<double> setMat = neti->set(0, 1);
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(0)});
-  Eigen::VectorXd setVec = setMat(v);
+  Distribution<double> v = neti->toVec(PacketSet{pkt(0)});
+  Eigen::VectorXd setVec = toVec(setMat(v));
 
-  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{pkt(1)});
+  Eigen::VectorXd trueSetVec = toVec(neti->toVec(PacketSet{pkt(1)}));
 
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
@@ -135,10 +135,10 @@ TEST_F(NetikatTest, Amp) {
   TransitionMatrix<double> setZeroMat = neti->set(0, 0);
   TransitionMatrix<double> setOneMat = neti->set(0, 1);
   TransitionMatrix<double> setBothMat = neti->amp(setZeroMat, setOneMat);
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(0)});
-  Eigen::VectorXd setVec = setBothMat(v);
+  Distribution<double> v = neti->toVec(PacketSet{pkt(0)});
 
-  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{pkt(0), pkt(1)});
+  Eigen::VectorXd setVec = toVec(setBothMat(v));
+  Eigen::VectorXd trueSetVec = toVec(neti->toVec(PacketSet{pkt(0), pkt(1)}));
 
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
@@ -159,21 +159,21 @@ TEST_F(NetikatTest, AmpCommutes) {
 
   TransitionMatrix<double> C = neti->amp(A, B);
   TransitionMatrix<double> D = neti->amp(B, A);
-  EXPECT_OP_NEAR(C, D, neti->matrixDim, 1e-12);
+  EXPECT_MAT_NEAR(toMat(C, neti->matrixDim), toMat(D, neti->matrixDim), 1e-12);
 }
 
 TEST_F(NetikatTest, Seq) {
   TransitionMatrix<double> setZeroMat = neti->set(0, 0);
   TransitionMatrix<double> setOneMat = neti->set(0, 1);
   TransitionMatrix<double> setZeroThenOneMat = neti->seq(setOneMat, setZeroMat);
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1)});
+  Distribution<double> v = neti->toVec(PacketSet{pkt(1)});
 
-  Eigen::VectorXd setZeroVec = setZeroMat(v);
-  Eigen::VectorXd trueSetZeroVec = neti->toVec(PacketSet{pkt(0)});
+  Eigen::VectorXd setZeroVec = toVec(setZeroMat(v));
+  Eigen::VectorXd trueSetZeroVec = toVec(neti->toVec(PacketSet{pkt(0)}));
   EXPECT_MAT_EQ(setZeroVec, trueSetZeroVec);
 
-  Eigen::VectorXd setVec = setZeroThenOneMat(v);
-  Eigen::VectorXd trueSetVec = neti->toVec(PacketSet{pkt(1)});
+  Eigen::VectorXd setVec = toVec(setZeroThenOneMat(v));
+  Eigen::VectorXd trueSetVec = toVec(neti->toVec(PacketSet{pkt(1)}));
 
   EXPECT_MAT_EQ(setVec, trueSetVec);
 }
@@ -193,11 +193,11 @@ TEST_F(NetikatTest, Choice) {
   TransitionMatrix<double> setOneMat = neti->set(0, 1);
   double p = 0.25;
   TransitionMatrix<double> probMat = neti->choice(p, setZeroMat, setOneMat);
-  Eigen::VectorXd v = neti->toVec(PacketSet{pkt(1)});
-  Eigen::VectorXd v0 = neti->toVec(PacketSet{pkt(0)});
-  Eigen::VectorXd v1 = neti->toVec(PacketSet{pkt(1)});
+  Distribution<double> v = neti->toVec(PacketSet{pkt(1)});
+  Eigen::VectorXd v0 = toVec(neti->toVec(PacketSet{pkt(0)}));
+  Eigen::VectorXd v1 = toVec(neti->toVec(PacketSet{pkt(1)}));
 
-  Eigen::VectorXd chosenVec = probMat(v);
+  Eigen::VectorXd chosenVec = toVec(probMat(v));
   Eigen::VectorXd trueChosenVec = p * v0 + (1 - p) * v1;
 
   EXPECT_MAT_EQ(chosenVec, trueChosenVec);

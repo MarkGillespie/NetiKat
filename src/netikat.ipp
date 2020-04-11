@@ -106,11 +106,12 @@ template <typename T> size_t NetiKAT<T>::index(const PacketSet &packets) const {
   return peerIndex + numNetiKATsOfSizeLessThan[packets.size()];
 }
 
+// TODO: rename
 template <typename T>
-Eigen::VectorXd NetiKAT<T>::toVec(const PacketSet &packets) const {
+Distribution<T> NetiKAT<T>::toVec(const PacketSet &packets) const {
   size_t pIdx = index(packets);
-  Eigen::VectorXd v = Eigen::VectorXd::Zero(matrixDim);
-  v(pIdx) = 1;
+  Distribution<T> v;
+  v[pIdx] = 1;
   return v;
 }
 
@@ -148,8 +149,8 @@ PacketSet NetiKAT<T>::packetSetFromIndex(size_t idx) const {
 
 template <typename T> TransitionMatrix<T> NetiKAT<T>::drop() const {
   TransitionMatrix<T> f = [&](Distribution<T> p) -> Distribution<T> {
-    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
-    pOut(0) = 1;
+    Distribution<T> pOut;
+    pOut[0] = 1;
     return pOut;
   };
   return f;
@@ -170,7 +171,7 @@ TransitionMatrix<T> NetiKAT<T>::test(size_t fieldIndex,
   // variables by reference
   TransitionMatrix<T> f = [&, fieldIndex,
                            fieldValue](Distribution<T> p) -> Distribution<T> {
-    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    Distribution<T> pOut;
     for (size_t i = 0; i < matrixDim; ++i) {
       PacketSet packetsIn = packetSetFromIndex(i);
       PacketSet packetsOut;
@@ -195,7 +196,7 @@ TransitionMatrix<T> NetiKAT<T>::testSize(size_t fieldIndex, size_t fieldValue,
   // variables by reference
   TransitionMatrix<T> f = [&, fieldIndex, fieldValue,
                            n](Distribution<T> p) -> Distribution<T> {
-    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    Distribution<T> pOut;
     for (size_t i = 0; i < matrixDim; ++i) {
       PacketSet packetsIn = packetSetFromIndex(i);
       size_t nPacketsOut = 0;
@@ -222,7 +223,7 @@ TransitionMatrix<T> NetiKAT<T>::set(size_t fieldIndex,
   // variables by reference
   TransitionMatrix<T> f = [&, fieldIndex,
                            fieldValue](Distribution<T> p) -> Distribution<T> {
-    Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+    Distribution<T> pOut;
     for (size_t i = 0; i < matrixDim; ++i) {
       PacketSet packetsIn = packetSetFromIndex(i);
       PacketSet packetsOut;
@@ -250,16 +251,13 @@ size_t NetiKAT<T>::packetSetUnion(size_t a, size_t b) const {
 template <typename T>
 Distribution<T> NetiKAT<T>::amp(const Distribution<T> &p,
                                 const Distribution<T> &q) const {
-  Distribution<T> pOut = Distribution<T>::Zero(matrixDim);
+  Distribution<T> pOut;
 
-  for (size_t iP = 0; iP < matrixDim; ++iP) {
-    if (p(iP) < 1e-12) {
-      continue;
-    }
-    for (size_t iQ = 0; iQ < matrixDim; ++iQ) {
-      double prob = p(iP) * q(iQ);
+  for (std::pair<size_t, double> iP : p) {
+    for (std::pair<size_t, double> iQ : q) {
+      double prob = iP.second * iQ.second;
       if (prob > 1e-12) {
-        size_t packetUnion = packetSetUnion(iP, iQ);
+        size_t packetUnion = packetSetUnion(iP.first, iQ.first);
         pOut[packetUnion] += prob;
       }
     }
@@ -300,7 +298,14 @@ TransitionMatrix<T> NetiKAT<T>::choice(T r, TransitionMatrix<T> a,
   TransitionMatrix<T> f = [&, a, b, r](Distribution<T> p) -> Distribution<T> {
     Distribution<T> ap = a(p);
     Distribution<T> bp = b(p);
-    return r * ap + (1 - r) * bp;
+    Distribution<T> pOut;
+    for (std::pair<size_t, double> iP : ap) {
+      pOut[iP.first] += r * iP.second;
+    }
+    for (std::pair<size_t, double> iP : bp) {
+      pOut[iP.first] += (1 - r) * iP.second;
+    }
+    return pOut;
   };
   return f;
 }
@@ -309,13 +314,24 @@ TransitionMatrix<T> NetiKAT<T>::choice(T r, TransitionMatrix<T> a,
 template <typename T>
 TransitionMatrix<T> NetiKAT<T>::starApprox(TransitionMatrix<T> a, T tol) const {
 
+  auto dist = [](Distribution<T> a, const Distribution<T> &b) {
+    for (std::pair<size_t, double> iB : b) {
+      a[iB.first] -= iB.second;
+    }
+    double sumSq = 0;
+    for (std::pair<size_t, double> iA : a) {
+      sumSq += pow(iA.second, 2);
+    }
+    return sqrt(sumSq);
+  };
+
   // TODO: capture by reference instead?
   // Capture a and b by value so they don't disappear
   TransitionMatrix<T> f = [&, a, tol](Distribution<T> p) -> Distribution<T> {
     Distribution<T> oldS = p;
     Distribution<T> s = amp(p, a(oldS));
     starIter = 0;
-    while ((s - oldS).norm() > tol) {
+    while (dist(s, oldS) > tol) {
       oldS = s;
       s = amp(p, a(s));
       normalize(s);
@@ -346,10 +362,13 @@ TransitionMatrix<T> NetiKAT<T>::dumbStarApprox(TransitionMatrix<T> a,
 // Make p a probability distribution by normalizing its column sum to 1
 template <typename T> void NetiKAT<T>::normalize(Distribution<T> &p) const {
 
-  double colSum = 0;
-  for (size_t i = 0; i < matrixDim; ++i) {
-    p(i) = abs(p(i)); // TODO: is this necessary? is it slow?
-    colSum += p(i);
+  double sum = 0;
+  // Iterate over an unordered_map using range based for loop
+  for (std::pair<std::size_t, T> entry : p) {
+    p[entry.first] = abs(entry.second); // TODO: is this necessary? is it slow?
+    sum += p[entry.first];
   }
-  p /= colSum;
+  for (std::pair<std::size_t, T> entry : p) {
+    p[entry.first] = p[entry.first] / sum;
+  }
 }

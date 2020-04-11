@@ -9,6 +9,7 @@ add_library(
   linear_algebra_utilities.ipp
   linear_algebra_utilities.cpp
   utils.h
+  utils.ipp
   utils.cpp
 )
 target_link_libraries(Packets eigen)

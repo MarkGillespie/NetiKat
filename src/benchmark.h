@@ -1,10 +1,5 @@
 #include "netikat.h"
-
-#include <stdlib.h> /* rand, malloc */
-#include <sys/mman.h>
-
-// Generate a random floating point number between fMin and fMax
-template <typename T> T fRand(T fMin, T fMax);
+#include "utils.h"
 
 // Generate a random stochastic matrix of size nxn with entriesPerCol nonzero
 // entries per column. Default value of entriesPerCol is 24
