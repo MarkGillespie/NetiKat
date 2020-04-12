@@ -13,6 +13,10 @@ These benchmarks aren't necessarily indicative of how NetiKAT will perform on re
 
 Even though our matrices are really big, they still don't represent very large networks. The largest matrices I benchmarked were around 8 million x 8 million, and that only represents a network with 64 possible packets containing up to 5 packets at a time. We should be able to scale to slightly larger networks - the current bottleneck is actually generating random sparse matrices for the benchmark. But getting significantly bigger will be a challenge.
 
+![Sparse Vector Performance](plots/sparse-vec-perf.png "Sparse Vector Performance")
+
+Interestingly, matrix multiplication is still the slowest operation in the `SparseVector` setting, but it's now more in line with the other operations.
+
 ## Building NetiKat
 
 This repository uses git submodules. To clone, run `git clone [URL] --recursive`.
