@@ -2,15 +2,9 @@
 
 int main() {
 
-  std::vector<double> sizes{1e5, 1e6,   5e6, 1e7,   2.5e7,
-                            5e7, 7.5e7, 1e8, 1.5e8, 2e8};
-  for (double i : sizes) {
-    if (i > std::numeric_limits<size_t>::max()) {
-      cout << "ERROR: " << i << " is to big to be represented as a size_t"
-           << endl;
-    }
-    std::vector<size_t> packetType{(size_t)i};
-    NetiKAT<double> neti(packetType, 1);
+  for (size_t n = 16; n <= 64; n += 4) {
+    std::vector<size_t> packetType{n};
+    NetiKAT<double> neti(packetType, 5);
     benchmark(neti);
   }
 

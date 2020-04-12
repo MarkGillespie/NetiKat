@@ -12,7 +12,8 @@ template <typename T>
 Eigen::SparseMatrix<T> randomStochastic(size_t n, size_t entriesPerCol = 24);
 
 template <typename T>
-void benchmark(const NetiKAT<T> &neti, bool runFullStar = false);
+void benchmark(const NetiKAT<T> &neti, size_t entriesPerCol = 24,
+               bool verbose = false, bool runFullStar = false);
 
 template <typename T> void starParameterSweep();
 
