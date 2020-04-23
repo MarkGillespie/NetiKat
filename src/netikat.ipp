@@ -172,16 +172,16 @@ TransitionMatrix<T> NetiKAT<T>::test(size_t fieldIndex,
   TransitionMatrix<T> f = [&, fieldIndex,
                            fieldValue](Distribution<T> p) -> Distribution<T> {
     Distribution<T> pOut;
-    for (size_t i = 0; i < matrixDim; ++i) {
-      PacketSet packetsIn = packetSetFromIndex(i);
+    for (std::pair<size_t, double> pair : p) {
+      PacketSet packetsIn = packetSetFromIndex(pair.first);
       PacketSet packetsOut;
       for (size_t iP : packetsIn) {
-        Packet p = packetFromIndex(iP);
-        if (p[fieldIndex] == fieldValue) {
-          packetsOut.insert(packetIndex(p));
+        Packet pac = packetFromIndex(iP);
+        if (pac[fieldIndex] == fieldValue) {
+          packetsOut.insert(iP);
         }
       }
-      pOut[index(packetsOut)] += p[i];
+      pOut[index(packetsOut)] += pair.second;
     }
     return pOut;
   };
@@ -197,17 +197,19 @@ TransitionMatrix<T> NetiKAT<T>::testSize(size_t fieldIndex, size_t fieldValue,
   TransitionMatrix<T> f = [&, fieldIndex, fieldValue,
                            n](Distribution<T> p) -> Distribution<T> {
     Distribution<T> pOut;
-    for (size_t i = 0; i < matrixDim; ++i) {
-      PacketSet packetsIn = packetSetFromIndex(i);
+    for (std::pair<size_t, double> pair : p) {
+      PacketSet packetsIn = packetSetFromIndex(pair.first);
       size_t nPacketsOut = 0;
       for (size_t iP : packetsIn) {
-        Packet p = packetFromIndex(iP);
-        if (p[fieldIndex] == fieldValue) {
+        Packet pac = packetFromIndex(iP);
+        if (pac[fieldIndex] == fieldValue) {
           nPacketsOut += 1;
         }
       }
       if (nPacketsOut == n) {
-        pOut[i] = p[i];
+        pOut[pair.first] = pair.second;
+      } else {
+        pOut[0] += pair.second;
       }
     }
     return pOut;
@@ -224,15 +226,44 @@ TransitionMatrix<T> NetiKAT<T>::set(size_t fieldIndex,
   TransitionMatrix<T> f = [&, fieldIndex,
                            fieldValue](Distribution<T> p) -> Distribution<T> {
     Distribution<T> pOut;
-    for (size_t i = 0; i < matrixDim; ++i) {
-      PacketSet packetsIn = packetSetFromIndex(i);
+    for (std::pair<size_t, double> pair : p) {
+      PacketSet packetsIn = packetSetFromIndex(pair.first);
+      size_t nPacketsOut = 0;
       PacketSet packetsOut;
       for (size_t iP : packetsIn) {
-        Packet p = packetFromIndex(iP);
-        p[fieldIndex] = fieldValue;
-        packetsOut.insert(packetIndex(p));
+        Packet pac = packetFromIndex(iP);
+        pac[fieldIndex] = fieldValue;
+        packetsOut.insert(packetIndex(pac));
       }
-      pOut[index(packetsOut)] += p[i];
+      pOut[index(packetsOut)] += pair.second;
+    }
+    return pOut;
+  };
+  return f;
+}
+
+template <typename T> TransitionMatrix<T> NetiKAT<T>::cap1() const {
+  TransitionMatrix<T> f = [&](Distribution<T> p) -> Distribution<T> {
+    Distribution<T> pOut;
+    for (std::pair<size_t, double> pair : p) {
+      PacketSet packetsIn = packetSetFromIndex(pair.first);
+
+      // If the set already has size 1, don't do anything
+      if (packetsIn.size() <= 1) {
+        pOut[pair.first] += pair.second;
+      } else {
+        // Otherwise, yield a set containing one of the elements with equal
+        // probability
+        size_t setSize = packetsIn.size();
+
+        // Uniform distribution over packets in the set
+        double prob = 1 / (double)setSize;
+
+        for (size_t pac : packetsIn) {
+          PacketSet packetsOut{pac};
+          pOut[index(packetsOut)] += pair.second * prob;
+        }
+      }
     }
     return pOut;
   };
@@ -277,6 +308,22 @@ TransitionMatrix<T> NetiKAT<T>::amp(TransitionMatrix<T> a,
   return f;
 }
 
+template <typename T>
+TransitionMatrix<T> NetiKAT<T>::amp(std::vector<TransitionMatrix<T>> as) const {
+  TransitionMatrix<T> f = [&, as](Distribution<T> p) -> Distribution<T> {
+    if (as.size() == 0) {
+      return p;
+    } else {
+      Distribution<T> pOut = as[0](p);
+      for (size_t iA = 1; iA < as.size(); ++iA) {
+        pOut = amp(pOut, as[iA](p));
+      }
+      return pOut;
+    }
+  };
+  return f;
+}
+
 // B[p;q]
 template <typename T>
 TransitionMatrix<T> NetiKAT<T>::seq(TransitionMatrix<T> a,
@@ -308,6 +355,12 @@ TransitionMatrix<T> NetiKAT<T>::choice(T r, TransitionMatrix<T> a,
     return pOut;
   };
   return f;
+}
+
+template <typename T>
+TransitionMatrix<T> NetiKAT<T>::ifThen(TransitionMatrix<T> test,
+                                       TransitionMatrix<T> body) const {
+  return seq(body, test);
 }
 
 // B[p*]

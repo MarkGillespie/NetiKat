@@ -81,8 +81,12 @@ public:
   // B[fieldIndex <- fieldValue]
   TransitionMatrix<T> set(size_t fieldIndex, size_t fieldValue) const;
 
+  // Limit PacketSets to capacity 1
+  TransitionMatrix<T> cap1() const;
+
   // B[p & q]
   TransitionMatrix<T> amp(TransitionMatrix<T> p, TransitionMatrix<T> q) const;
+  TransitionMatrix<T> amp(std::vector<TransitionMatrix<T>> ps) const;
   Distribution<T> amp(const Distribution<T> &p, const Distribution<T> &q) const;
 
   // B[p;q]
@@ -91,6 +95,9 @@ public:
   // B[p \oplus_r q]
   TransitionMatrix<T> choice(T r, TransitionMatrix<T> p,
                              TransitionMatrix<T> q) const;
+
+  TransitionMatrix<T> ifThen(TransitionMatrix<T> test,
+                             TransitionMatrix<T> body) const;
 
   // B[p*]
   // Computes B[p*] by computing B[p^(n)] until it differs from B[p^(n-1)] by
