@@ -200,6 +200,9 @@ TEST_F(NetikatTest, Choice) {
   Eigen::VectorXd chosenVec = toVec(probMat(v));
   Eigen::VectorXd trueChosenVec = p * v0 + (1 - p) * v1;
 
+  // cout << v0 << endl << endl;
+  // cout << v1 << endl << endl;
+
   EXPECT_MAT_EQ(chosenVec, trueChosenVec);
 }
 
